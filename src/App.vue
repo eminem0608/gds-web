@@ -1,7 +1,5 @@
 <template>
-  <div v-if="authLoading" class="auth-state">正在检查登录状态...</div>
-
-  <main v-else-if="!authContext" class="login-shell">
+  <main v-if="!authContext" class="login-shell">
     <section class="login-panel">
       <div class="login-brand">发啦啦精酿</div>
       <h1>管理端登录</h1>
@@ -108,7 +106,6 @@ const currentPage = ref("dashboard");
 const keyword = ref("");
 const toastMessage = ref("");
 const pageRevision = ref(0);
-const authLoading = ref(true);
 const authSubmitting = ref(false);
 const authContext = ref(null);
 const authError = ref("");
@@ -159,16 +156,6 @@ function applyAuthContext(context) {
     : (context.menus?.[0]?.code || "tasks");
 }
 
-async function restoreSession() {
-  try {
-    applyAuthContext(await brewApi.me());
-  } catch {
-    authContext.value = null;
-  } finally {
-    authLoading.value = false;
-  }
-}
-
 async function signIn() {
   authSubmitting.value = true;
   authError.value = "";
@@ -191,8 +178,6 @@ async function signOut() {
     currentPage.value = "dashboard";
   }
 }
-
-onMounted(restoreSession);
 
 watch(currentRole, () => {
   if (!roleConfig.value.pages.includes(currentPage.value)) {
