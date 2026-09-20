@@ -17,6 +17,11 @@
         <button class="btn btn-primary login-submit" type="submit" :disabled="authSubmitting">
           {{ authSubmitting ? "登录中..." : "登录" }}
         </button>
+        <!--
+        <div v-if="createDesignTab === 'recipe'" class="recipe-select-design-panel"><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'select-f'+index" class="recipe-select-row"><select v-model="line.subcategory"><option value="">选择种类</option><option v-for="item in materialCategoryOptions('malt','adjunct')" :key="item.id" :value="item.code">{{ item.material_group === 'malt' ? '麦芽 · ' : '其他可发酵物 · ' }}{{ item.name }}</option></select><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('malt','adjunct')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="recipe-create-empty">还没有添加原料，从系统分类和物料中选择</div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'select-h'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'select-y'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><input v-model="line.flavor" placeholder="风味描述" readonly><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">理化指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label></div></div></div>
+        <div v-if="createDesignTab === 'mash'" class="recipe-process-panel"><div class="recipe-process-heading"><strong>糖化工艺设计</strong><span>设置糖化、煮沸和洗糟的目标参数</span></div><div class="recipe-process-grid"><label><span>煮沸强度(%)</span><input v-model.number="designDraft.mash.boil_strength" type="number" step="0.1" placeholder="如 8.5"></label><label><span>水料比(L/KG)</span><input v-model.number="designDraft.mash.water_grain_ratio" type="number" step="0.1" placeholder="如 3.2"></label><label><span>煮沸时长(min)</span><input v-model.number="designDraft.mash.boil_time_min" type="number" placeholder="如 60"></label><label><span>洗糟次数</span><input v-model.number="designDraft.mash.sparge_count" type="number" placeholder="如 2"></label></div><div class="recipe-process-note"><span>工艺说明</span><textarea v-model.trim="designDraft.mash.notes" placeholder="记录糖化温度曲线、升温节点、洗糟终点等要求"></textarea></div></div>
+        <div v-if="createDesignTab === 'fermentation'" class="recipe-process-panel"><div class="recipe-process-heading"><strong>发酵工艺设计</strong><span>设置主发酵和冷储的目标条件</span></div><div class="recipe-process-grid"><label><span>目标发酵温度(℃)</span><input v-model.number="designDraft.fermentation.target_temperature" type="number" step="0.1" placeholder="如 18"></label><label><span>目标发酵天数(day)</span><input v-model.number="designDraft.fermentation.target_days" type="number" step="0.5" placeholder="如 7"></label><label><span>冷储温度(℃)</span><input v-model.number="designDraft.fermentation.cold_storage_temperature" type="number" step="0.1" placeholder="如 2"></label></div><div class="recipe-process-note"><span>发酵要求</span><textarea v-model.trim="designDraft.fermentation.notes" placeholder="记录接种量、降温节点、压力控制和冷储要求"></textarea></div></div>
+      -->
       </form>
     </section>
   </main>
@@ -940,22 +945,57 @@ const ProductionPage = defineComponent({
   `
 });
 
+const recipeDesignMarkup = `
+    <div v-if="versionDetail" class="recipe-design-panel">
+      <div class="recipe-design-header"><strong>配方设计</strong><span>麦芽与可发酵物、啤酒花、酵母和技术指标</span></div>
+      <div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'f'+index" class="recipe-design-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择物料</option><option v-for="item in designMaterials('malt','adjunct')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model.number="line.extract_rate" type="number" placeholder="浸出率(%)" readonly><input v-model.number="line.color" type="number" placeholder="色度" readonly><input v-model="line.notes" placeholder="备注"><button v-if="canManage" class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="empty">暂无麦芽与可发酵物</div></div>
+      <div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'h'+index" class="recipe-design-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择酒花</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.alpha_acid" type="number" placeholder="Alpha酸(%)" readonly><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><input v-model.number="line.utilization" type="number" placeholder="异构率(%)"><button v-if="canManage" class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div><div v-if="!designDraft.hops.length" class="empty">暂无啤酒花</div></div>
+      <div class="recipe-design-section"><div class="recipe-section-title">酵母 <button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'y'+index" class="recipe-design-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择酵母</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.attenuation" type="number" placeholder="发酵度(%)" readonly><input v-model="line.flavor" placeholder="风味描述" readonly><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><button v-if="canManage" class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div><div v-if="!designDraft.yeast.length" class="empty">暂无酵母</div></div>
+      <div class="recipe-design-section"><div class="recipe-section-title">指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label><label><span>终点残糖(g/L)</span><input v-model.number="designDraft.metrics.final_residual_sugar" type="number" step="0.1"></label><label><span>表观发酵度(%)</span><input v-model.number="designDraft.metrics.apparent_attenuation" type="number" step="0.1"></label><label><span>pH</span><input v-model.number="designDraft.metrics.ph" type="number" step="0.01"></label><label><span>二氧化碳(% m/m)</span><input v-model.number="designDraft.metrics.co2" type="number" step="0.01"></label><label><span>酸度(ml/100ml)</span><input v-model.number="designDraft.metrics.acidity" type="number" step="0.01"></label><label><span>双乙酰(mg/L)</span><input v-model.number="designDraft.metrics.diacetyl" type="number" step="0.01"></label><label><span>浑浊度(NTU)</span><input v-model.number="designDraft.metrics.turbidity" type="number" step="0.1"></label></div></div>
+      <div v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="recipe-design-footer"><button class="btn btn-sm btn-primary" type="button" :disabled="saving" @click="saveVersion">保存配方设计</button></div>
+    </div>`;
+
 const RecipePage = defineComponent({
-  components: { DataTable },
+  components: { DataTable, StatusTag },
   props: { permissions: { type: Array, default: () => [] } },
   setup(props) {
     const recipes = ref([]);
     const products = ref([]);
+    const brewSystems = ref([]);
+    const materials = ref([]);
+    const materialCategories = ref([]);
+    const beerCategories = ref([]);
+    const selectedRecipe = ref(null);
+    const versions = ref([]);
+    const versionDetail = ref(null);
+    const materialDrafts = ref([]);
+    const stepDrafts = ref([]);
+    const designDraft = ref({ fermentables: [], hops: [], yeast: [], metrics: {}, mash: {}, fermentation: {} });
     const loading = ref(false);
     const saving = ref(false);
     const creating = ref(false);
+    const createDesignTab = ref("recipe");
+    const calculatedMetrics = computed(() => {
+      const design = designDraft.value;
+      const metrics = design.metrics || {};
+      const fermentables = Array.isArray(design.fermentables) ? design.fermentables : [];
+      const totalQuantity = fermentables.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
+      const originalGravity = Number(metrics.original_gravity) || fermentables.reduce((sum, line) => sum + (Number(line.gravity) || 0), 0);
+      const color = Number(metrics.color_ebc) || fermentables.reduce((sum, line) => sum + (Number(line.color_contribution || line.color) || 0), 0);
+      const ibu = Number(metrics.ibu) || (Array.isArray(design.hops) ? design.hops.reduce((sum, line) => sum + (Number(line.bitterness) || 0), 0) : 0);
+      const attenuation = Number(metrics.apparent_attenuation) || 0;
+      const alcohol = Number(metrics.abv) || (originalGravity && attenuation ? originalGravity * attenuation / 2 : 0);
+      return { totalQuantity, originalGravity, finalGravity: Number(metrics.final_gravity) || 0, color, ibu, alcohol };
+    });
     const error = ref("");
-    const draft = ref({ code: "", name: "", product_tmpl_id: "", beer_style: "" });
-    const canManage = computed(() => props.permissions.includes("recipe.version.manage"));
+    const draft = ref({ code: "", name: "", product_tmpl_id: "", beer_style: "", base_volume_l: 1000, original_gravity: "", final_gravity: "", bitterness_ibu: "", color_ebc: "", alcohol_abv: "", notes: "" });
+    const canManage = computed(() => props.permissions.some(item => ["recipe.version.manage", "base.master_data.manage"].includes(item)));
+    const beerCategoryOptions = computed(() => beerCategories.value.filter(item => !item.parent_id));
+    const beerSubcategoryOptions = computed(() => beerCategories.value.filter(item => Number(item.parent_id?.id || item.parent_id || 0) === Number(draft.value.beer_category_id || 0)));
+    const selectedBrewSystem = computed(() => brewSystems.value.find(item => String(item.id) === String(draft.value.brew_equipment_id)) || null);
     const columns = [
       { key: "code", label: "配方编码", mono: true },
       { key: "name", label: "配方名称" },
-      { key: "product", label: "成品", format: row => row.product?.name || "-" },
       { key: "beer_style", label: "啤酒风格", format: row => row.beer_style || "-" },
       { key: "active_version_id", label: "启用版本", format: row => row.active_version_id || "未启用" },
       { key: "state", label: "状态", tag: true }
@@ -965,12 +1005,18 @@ const RecipePage = defineComponent({
       loading.value = true;
       error.value = "";
       try {
-        const [recipeRows, productRows] = await Promise.all([
+        const [recipeRows, materialRows, materialCategoryRows, beerCategoryRows, equipmentRows] = await Promise.all([
           brewApi.listRecipes({ page_size: 100 }),
-          brewApi.listMaster("products", { page_size: 100, active: true })
+          brewApi.listMaster("materials", { page_size: 200, active: true }),
+          brewApi.listMaster("material-categories", { page_size: 200, active: true }),
+          brewApi.listMaster("beer-categories", { page_size: 200, active: true }),
+          brewApi.listMaster("equipment", { page_size: 200, active: true })
         ]);
         recipes.value = recipeRows.map(item => ({ ...item, state: item.active ? (item.active_version_id ? "使用中" : "待启用") : "已归档" }));
-        products.value = productRows;
+        materials.value = materialRows;
+        materialCategories.value = materialCategoryRows;
+        beerCategories.value = beerCategoryRows;
+        brewSystems.value = equipmentRows.filter(item => item.brew_equipment_type === "mash");
       } catch (cause) {
         error.value = cause.message || "配方加载失败。";
       } finally {
@@ -978,14 +1024,30 @@ const RecipePage = defineComponent({
       }
     }
 
+    function resetDraft() { draft.value = { name: "", product_tmpl_id: "", beer_category_id: "", beer_subcategory_id: "", beer_style: "", base_volume_l: 1000, brew_equipment_id: "", brew_volume_l: 1000, original_gravity: "", final_gravity: "", bitterness_ibu: "", color_ebc: "", alcohol_abv: "", notes: "" }; designDraft.value = emptyDesign(); createDesignTab.value = "recipe"; }
+    function selectBrewSystem() { const max = Number(selectedBrewSystem.value?.brew_capacity_l) || 0; if (max) { draft.value.base_volume_l = max; draft.value.brew_volume_l = max; } else syncBrewVolume(); }
+    function syncBrewVolume() { const max = Number(selectedBrewSystem.value?.brew_capacity_l) || 0; const base = Number(draft.value.base_volume_l) || 0; draft.value.brew_volume_l = max ? Math.min(base || max, max) : (base || ""); }
+    function updateBrewVolume() { const max = Number(selectedBrewSystem.value?.brew_capacity_l) || 0; const volume = Number(draft.value.brew_volume_l) || 0; draft.value.brew_volume_l = max ? Math.min(Math.max(volume, 1), max) : volume; draft.value.base_volume_l = draft.value.brew_volume_l; }
+    function emptyDesign() { return { fermentables: [], hops: [], yeast: [], metrics: { abv: "", color_ebc: "", ibu: "", original_gravity: "", final_residual_sugar: "", ph: "", co2: "", acidity: "", diacetyl: "", turbidity: "", apparent_attenuation: "" }, mash: { boil_strength: "", water_grain_ratio: "", boil_time_min: "", sparge_count: "", steps: [] }, fermentation: { target_temperature: "", target_days: "", cold_storage_temperature: "", notes: "" } }; }
+    function defaultSteps() {
+      return [
+        { sequence: 10, name: "糖化", phase: "mash", action_type: "record", mandatory_confirmation: false, target_duration_hours: "", target_temperature: "", config: {} },
+        { sequence: 20, name: "进罐", phase: "fermentation", action_type: "enter_tank", mandatory_confirmation: true, target_duration_hours: "", target_temperature: "", config: {} },
+        { sequence: 30, name: "转罐", phase: "fermentation", action_type: "transfer", mandatory_confirmation: true, target_duration_hours: "", target_temperature: "", config: {} },
+        { sequence: 40, name: "包装放行", phase: "packaging", action_type: "packaging_release", mandatory_confirmation: true, target_duration_hours: "", target_temperature: "", config: {} }
+      ];
+    }
     async function submit() {
       saving.value = true;
       error.value = "";
       try {
-        await brewApi.createRecipe({ ...draft.value, product_tmpl_id: Number(draft.value.product_tmpl_id) });
-        draft.value = { code: "", name: "", product_tmpl_id: "", beer_style: "" };
+        const recipe = await brewApi.createRecipe({ name: draft.value.name, beer_style: draft.value.beer_style, beer_category_id: Number(draft.value.beer_category_id), beer_subcategory_id: Number(draft.value.beer_subcategory_id) });
+        const version = await brewApi.createRecipeVersion(recipe.id, { base_volume_l: Number(draft.value.base_volume_l) || 1000, original_gravity: Number(draft.value.original_gravity) || 0, final_gravity: Number(draft.value.final_gravity) || 0, bitterness_ibu: Number(draft.value.bitterness_ibu) || 0, color_ebc: Number(draft.value.color_ebc) || 0, alcohol_abv: Number(draft.value.alcohol_abv) || 0, notes: draft.value.notes, design: { ...designDraft.value, brew_equipment_id: draft.value.brew_equipment_id, brew_volume_l: Number(draft.value.brew_volume_l) || 0 } });
+        await brewApi.replaceRecipeSteps(version.id, { record_version: version.record_version, process_steps: defaultSteps() });
+        resetDraft();
         creating.value = false;
         await load();
+        await openRecipe(recipes.value.find(item => item.id === recipe.id) || recipe);
       } catch (cause) {
         error.value = cause.message || "配方保存失败。";
       } finally {
@@ -993,25 +1055,98 @@ const RecipePage = defineComponent({
       }
     }
 
+    async function openRecipe(recipe) {
+      selectedRecipe.value = recipe;
+      versionDetail.value = null;
+      versions.value = await brewApi.listRecipeVersions(recipe.id);
+    }
+    async function openVersion(version) {
+      versionDetail.value = await brewApi.getRecipeVersion(version.id);
+      materialDrafts.value = (versionDetail.value.materials || []).map(item => ({ ...item }));
+      stepDrafts.value = (versionDetail.value.process_steps || []).map(item => ({ ...item }));
+      designDraft.value = { ...emptyDesign(), ...(versionDetail.value.design || {}), metrics: { ...emptyDesign().metrics, ...(versionDetail.value.design?.metrics || {}) }, mash: { ...emptyDesign().mash, ...(versionDetail.value.design?.mash || {}) }, fermentation: { ...emptyDesign().fermentation, ...(versionDetail.value.design?.fermentation || {}) } };
+    }
+    async function createVersion() {
+      if (!selectedRecipe.value) return;
+      saving.value = true; error.value = "";
+      try {
+        const version = await brewApi.createRecipeVersion(selectedRecipe.value.id, { base_volume_l: 1000 });
+        await brewApi.replaceRecipeSteps(version.id, { record_version: version.record_version, process_steps: defaultSteps() });
+        versions.value = await brewApi.listRecipeVersions(selectedRecipe.value.id);
+        await openVersion(versions.value.find(item => Number(item.id) === Number(version.id)) || version);
+      } catch (cause) { error.value = cause.message || "草稿版本创建失败。"; }
+      finally { saving.value = false; }
+    }
+    function addMaterial() { materialDrafts.value.push({ product_id: "", quantity: 0, stage: "mash", notes: "" }); }
+    function removeMaterial(index) { materialDrafts.value.splice(index, 1); }
+    function addStep() { stepDrafts.value.push({ sequence: (stepDrafts.value.length + 1) * 10, name: "", phase: "mash", action_type: "record", mandatory_confirmation: false, target_duration_hours: "", target_temperature: "", config: {} }); }
+    function removeStep(index) { stepDrafts.value.splice(index, 1); }
+    function designMaterials(...categories) { return materials.value.filter(item => categories.includes(item.brew_material_category)); }
+    function materialCategoryOptions(...groups) {
+      return materialCategories.value.filter(item => groups.includes(item.material_group) && item.parent_id);
+    }
+    function fillDesignMaterial(line) {
+      const item = materials.value.find(row => Number(row.id) === Number(line.material_id));
+      if (!item) return;
+      line.name = item.name;
+      line.category = item.brew_material_category || "";
+      line.extract_rate = item.brew_extract_rate || 0;
+      line.attenuation = item.brew_extract_rate || 0;
+      line.color = item.brew_color_ebc || 0;
+      line.alpha_acid = item.brew_alpha_acid || 0;
+      line.flavor = item.brew_flavor_desc || "";
+    }
+    function addDesignLine(type) { designDraft.value[type].push(type === "hops" ? { material_id: "", category: "", name: "", quantity: "", alpha_acid: "", time: "", bitterness: "", utilization: "", notes: "" } : type === "yeast" ? { material_id: "", category: "", name: "", quantity: "", attenuation: "", flavor: "", temperature: "", notes: "" } : { material_id: "", category: "", name: "", quantity: "", ratio: "", extract_rate: "", color: "", notes: "" }); }
+    function removeDesignLine(type, index) { designDraft.value[type].splice(index, 1); }
+    async function saveVersion() {
+      if (!versionDetail.value) return;
+      saving.value = true; error.value = "";
+      try {
+        let current = await brewApi.updateRecipeVersion(versionDetail.value.id, { record_version: versionDetail.value.record_version, base_volume_l: Number(versionDetail.value.base_volume_l), original_gravity: Number(versionDetail.value.original_gravity) || 0, final_gravity: Number(versionDetail.value.final_gravity) || 0, bitterness_ibu: Number(versionDetail.value.bitterness_ibu) || 0, color_ebc: Number(versionDetail.value.color_ebc) || 0, alcohol_abv: Number(versionDetail.value.alcohol_abv) || 0, notes: versionDetail.value.notes || "", design: designDraft.value });
+        if (materialDrafts.value.length) current = await brewApi.replaceRecipeMaterials(versionDetail.value.id, { record_version: current.record_version, materials: materialDrafts.value.map((item, index) => ({ ...item, sequence: (index + 1) * 10, quantity: Number(item.quantity) || 0 })) });
+        if (stepDrafts.value.length) current = await brewApi.replaceRecipeSteps(versionDetail.value.id, { record_version: current.record_version, process_steps: stepDrafts.value.map((item, index) => ({ ...item, sequence: (index + 1) * 10, target_duration_hours: item.target_duration_hours === "" ? null : Number(item.target_duration_hours), target_temperature: item.target_temperature === "" ? null : Number(item.target_temperature) })) });
+        await openVersion(current);
+        versions.value = await brewApi.listRecipeVersions(selectedRecipe.value.id);
+      } catch (cause) { error.value = cause.message || "配方工艺保存失败。"; }
+      finally { saving.value = false; }
+    }
+    async function versionAction(action) {
+      saving.value = true; error.value = "";
+      try { await brewApi.recipeVersionAction(versionDetail.value.id, action, versionDetail.value.record_version); await openRecipe(selectedRecipe.value); const latest = versions.value.find(item => Number(item.id) === Number(versionDetail.value.id)); if (latest) await openVersion(latest); }
+      catch (cause) { error.value = cause.message || "版本状态更新失败。"; }
+      finally { saving.value = false; }
+    }
+
     onMounted(load);
-    return { recipes, products, loading, saving, creating, error, draft, canManage, columns, load, submit };
+    return { recipes, products, materials, brewSystems, beerCategories, beerCategoryOptions, beerSubcategoryOptions, selectedBrewSystem, selectedRecipe, versions, versionDetail, materialDrafts, stepDrafts, designDraft, calculatedMetrics, loading, saving, creating, createDesignTab, error, draft, canManage, columns, load, submit, resetDraft, syncBrewVolume, openRecipe, openVersion, createVersion, addMaterial, removeMaterial, addStep, removeStep, designMaterials, materialCategoryOptions, fillDesignMaterial, addDesignLine, removeDesignLine, saveVersion, versionAction };
   },
-  template: `
+  template: `${recipeDesignMarkup}
     <div class="panel">
       <div class="panel-header">
         <div><div class="panel-title">配方版本库</div><div class="panel-subtitle">生产计划只能引用已启用的具体版本</div></div>
-        <div class="master-actions"><button class="btn btn-sm btn-secondary" @click="load">刷新</button><button v-if="canManage" class="btn btn-sm btn-primary" @click="creating = true">新建配方</button></div>
+        <div class="master-actions"><button class="btn btn-sm btn-secondary" @click="load">刷新</button><button v-if="canManage" class="btn btn-sm btn-primary" @click="resetDraft(); creating = true">新建配方工艺</button></div>
       </div>
       <div v-if="error" class="master-error">{{ error }}</div>
-      <form v-if="creating" class="master-form" @submit.prevent="submit">
-        <label><span>配方编码</span><input v-model.trim="draft.code" required></label>
-        <label><span>配方名称</span><input v-model.trim="draft.name" required></label>
-        <label><span>关联成品</span><select v-model="draft.product_tmpl_id" required><option value="">请选择</option><option v-for="item in products" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-        <label><span>啤酒风格</span><input v-model.trim="draft.beer_style"></label>
-        <div class="master-form-actions"><button class="btn btn-sm btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-sm btn-primary" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button></div>
+      <form v-if="creating" class="equipment-modal-mask" @submit.prevent="submit">
+       <div class="equipment-modal recipe-create-modal"><div class="equipment-modal-header"><div><div class="modal-title">新增配方工艺</div><div class="modal-subtitle">完成基础信息、原料配方和工艺指标后保存为草稿版本</div></div><button class="equipment-close" type="button" @click="creating = false">×</button></div><div class="equipment-modal-body recipe-create-body">
+        <label><span>啤酒名称</span><input v-model.trim="draft.name" placeholder="请输入啤酒名称" required></label>
+        <label><span>啤酒分类</span><select v-model="draft.beer_category_id" required @change="draft.beer_subcategory_id = ''"><option value="">请选择啤酒大类</option><option v-for="item in beerCategoryOptions" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <label><span>啤酒种类</span><select v-model="draft.beer_subcategory_id" required :disabled="!draft.beer_category_id"><option value="">{{ draft.beer_category_id ? '请选择啤酒小类' : '请先选择啤酒大类' }}</option><option v-for="item in beerSubcategoryOptions" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <label><span>使用设备</span><select v-model="draft.brew_equipment_id" required @change="selectBrewSystem"><option value="">请选择酿造系统</option><option v-for="item in brewSystems" :key="item.id" :value="item.id">{{ item.name }} · 最大 {{ item.brew_capacity_l || '—' }} L</option></select></label>
+        <label><span>酿造体积(L)</span><input v-model.number="draft.brew_volume_l" type="number" min="1" :max="selectedBrewSystem?.brew_capacity_l || undefined" required @input="updateBrewVolume"><small v-if="selectedBrewSystem" class="recipe-field-hint">最大 {{ selectedBrewSystem.brew_capacity_l }} L</small></label>
+        <label><span>原始糖度(°P)</span><input v-model.number="draft.original_gravity" type="number" step="0.1"></label>
+        <label><span>终点糖度(°P)</span><input v-model.number="draft.final_gravity" type="number" step="0.1"></label>
+        <label><span>苦度(IBU)</span><input v-model.number="draft.bitterness_ibu" type="number" step="0.1"></label>
+        <label><span>色度(EBC)</span><input v-model.number="draft.color_ebc" type="number" step="0.1"></label>
+        <label class="field-wide"><span>工艺备注</span><textarea v-model.trim="draft.notes"></textarea></label>
+        <div v-if="createDesignTab === 'recipe'" class="recipe-calculated-metrics"><div class="recipe-calculated-heading"><strong>配方计算结果</strong><span>根据原料、投放参数和酵母参数自动计算</span></div><div class="recipe-calculated-grid"><div><span>原始糖度(°P)</span><strong>{{ calculatedMetrics.originalGravity ? calculatedMetrics.originalGravity.toFixed(1) : '待计算' }}</strong></div><div><span>终点糖度(°P)</span><strong>{{ calculatedMetrics.finalGravity ? calculatedMetrics.finalGravity.toFixed(1) : '待计算' }}</strong></div><div><span>苦度(IBU)</span><strong>{{ calculatedMetrics.ibu ? calculatedMetrics.ibu.toFixed(1) : '待计算' }}</strong></div><div><span>色度(EBC)</span><strong>{{ calculatedMetrics.color ? calculatedMetrics.color.toFixed(1) : '待计算' }}</strong></div><div><span>酒精度(% ABV)</span><strong>{{ calculatedMetrics.alcohol ? calculatedMetrics.alcohol.toFixed(1) : '待计算' }}</strong></div></div></div>
+        <div v-if="createDesignTab === 'recipe'" class="recipe-select-design-panel"><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'select-f'+index" class="recipe-select-row"><select v-model="line.subcategory"><option value="">选择种类</option><option v-for="item in materialCategoryOptions('malt','adjunct')" :key="item.id" :value="item.code">{{ item.material_group === 'malt' ? '麦芽 · ' : '其他可发酵物 · ' }}{{ item.name }}</option></select><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('malt','adjunct')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="recipe-create-empty">还没有添加原料，从系统分类和物料中选择</div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'select-h'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'select-y'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><input v-model="line.flavor" placeholder="风味描述" readonly><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">理化指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label></div></div></div>
+        <div class="recipe-create-tabs"><button type="button" :class="['recipe-create-tab', { active: createDesignTab === 'recipe' }]" @click="createDesignTab = 'recipe'"><span>01</span><strong>配方设计</strong><small>原料与理化指标</small></button><button type="button" :class="['recipe-create-tab', { active: createDesignTab === 'mash' }]" @click="createDesignTab = 'mash'"><span>02</span><strong>糖化工艺设计</strong><small>糖化、煮沸与洗糟</small></button><button type="button" :class="['recipe-create-tab', { active: createDesignTab === 'fermentation' }]" @click="createDesignTab = 'fermentation'"><span>03</span><strong>发酵工艺设计</strong><small>温度、天数与储藏</small></button></div>
+        <div class="recipe-create-design"><div class="recipe-design-header"><strong>配方设计明细</strong><span>保存后可继续编辑草稿版本</span></div><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'cf'+index" class="recipe-design-row"><input v-model="line.category" placeholder="种类"><input v-model="line.name" placeholder="名称"><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model.number="line.extract_rate" type="number" placeholder="浸出率(%)"><input v-model.number="line.color" type="number" placeholder="色度"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加</button></div><div v-for="(line,index) in designDraft.hops" :key="'ch'+index" class="recipe-design-row"><input v-model="line.category" placeholder="种类"><input v-model="line.name" placeholder="名称"><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.alpha_acid" type="number" placeholder="Alpha酸(%)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><input v-model.number="line.utilization" type="number" placeholder="异构率(%)"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加</button></div><div v-for="(line,index) in designDraft.yeast" :key="'cy'+index" class="recipe-design-row"><input v-model="line.category" placeholder="种类"><input v-model="line.name" placeholder="名称"><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.attenuation" type="number" placeholder="发酵度(%)"><input v-model="line.flavor" placeholder="风味描述"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label><label><span>终点残糖(g/L)</span><input v-model.number="designDraft.metrics.final_residual_sugar" type="number" step="0.1"></label><label><span>表观发酵度(%)</span><input v-model.number="designDraft.metrics.apparent_attenuation" type="number" step="0.1"></label><label><span>pH</span><input v-model.number="designDraft.metrics.ph" type="number" step="0.01"></label><label><span>二氧化碳(% m/m)</span><input v-model.number="designDraft.metrics.co2" type="number" step="0.01"></label><label><span>酸度(ml/100ml)</span><input v-model.number="designDraft.metrics.acidity" type="number" step="0.01"></label><label><span>双乙酰(mg/L)</span><input v-model.number="designDraft.metrics.diacetyl" type="number" step="0.01"></label><label><span>浑浊度(NTU)</span><input v-model.number="designDraft.metrics.turbidity" type="number" step="0.1"></label></div></div></div></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中...' : '保存草稿' }}</button></div></div>
       </form>
       <div v-if="loading" class="panel-body empty">正在加载...</div>
-      <div v-else class="panel-body no-padding"><DataTable :columns="columns" :rows="recipes" /></div>
+      <div v-else class="panel-body recipe-list"><div v-for="recipe in recipes" :key="recipe.id" class="recipe-card"><div class="recipe-card-main"><strong>{{ recipe.name }}</strong><span>{{ recipe.code }} · {{ recipe.product?.name || '未关联成品' }} · {{ recipe.beer_style || '未设置风格' }}</span></div><StatusTag :text="recipe.state" /><button class="btn btn-xs btn-outline" type="button" @click="openRecipe(recipe)">查看版本</button></div><div v-if="!recipes.length" class="empty">暂无配方，请先新增配方工艺</div></div>
+      <div v-if="selectedRecipe" class="panel recipe-editor"><div class="panel-header"><div><div class="panel-title">{{ selectedRecipe.name }} · 配方版本</div><div class="panel-subtitle">版本发布前可修改；启用后将作为生产计划引用的配方快照</div></div><button v-if="canManage" class="btn btn-sm btn-primary" type="button" @click="createVersion">＋ 新建草稿版本</button></div><div class="recipe-version-list"><button v-for="version in versions" :key="version.id" type="button" :class="['recipe-version-chip', { active: versionDetail?.id === version.id }]" @click="openVersion(version)">{{ version.name }} · {{ ({ draft: '草稿', submitted: '待审核', approved: '已审核', active: '使用中', inactive: '已停用', returned: '已退回' })[version.state] || version.state }}</button></div><div v-if="versionDetail" class="recipe-editor-body"><div class="recipe-editor-toolbar"><strong>{{ versionDetail.name }}</strong><div class="master-actions"><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-sm btn-primary" type="button" @click="saveVersion">保存版本</button><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-sm btn-outline" type="button" @click="versionAction('submit')">提交审核</button><button v-if="canManage && versionDetail.state === 'submitted'" class="btn btn-sm btn-outline" type="button" @click="versionAction('approve')">审核通过</button><button v-if="canManage && versionDetail.state === 'approved'" class="btn btn-sm btn-primary" type="button" @click="versionAction('activate')">启用版本</button><button v-if="canManage && versionDetail.state === 'active'" class="btn btn-sm btn-outline" type="button" @click="versionAction('deactivate')">停用版本</button></div></div><div class="recipe-editor-grid"><label><span>基准产量(L)</span><input v-model.number="versionDetail.base_volume_l" type="number" min="1"></label><label><span>原始糖度(°P)</span><input v-model.number="versionDetail.original_gravity" type="number" step="0.1"></label><label><span>终点糖度(°P)</span><input v-model.number="versionDetail.final_gravity" type="number" step="0.1"></label><label><span>苦度(IBU)</span><input v-model.number="versionDetail.bitterness_ibu" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="versionDetail.color_ebc" type="number" step="0.1"></label><label><span>酒精度(% ABV)</span><input v-model.number="versionDetail.alcohol_abv" type="number" step="0.1"></label></div><div class="recipe-editor-section"><div class="recipe-section-title">原料明细<button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addMaterial">＋ 添加原料</button></div><div v-for="(line, index) in materialDrafts" :key="index" class="recipe-line"><select v-model="line.product_id"><option value="">选择原料</option><option v-for="item in materials" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" min="0.001" step="0.001" placeholder="数量"><select v-model="line.stage"><option value="mash">糖化</option><option value="boil">煮沸</option><option value="fermentation">发酵</option><option value="packaging">包装</option></select><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-danger" type="button" @click="removeMaterial(index)">删除</button></div><div v-if="!materialDrafts.length" class="empty">暂无原料，提交审核前至少添加一条</div></div><div class="recipe-editor-section"><div class="recipe-section-title">工艺节点<button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addStep">＋ 添加节点</button></div><div v-for="(step, index) in stepDrafts" :key="index" class="recipe-line recipe-step-line"><input v-model.trim="step.name" placeholder="节点名称"><select v-model="step.phase"><option value="mash">糖化</option><option value="boil">煮沸</option><option value="fermentation">发酵</option><option value="packaging">包装</option></select><select v-model="step.action_type"><option value="record">记录</option><option value="enter_tank">进罐确认</option><option value="transfer">转罐确认</option><option value="packaging_release">包装放行</option></select><label class="checkbox-field"><input v-model="step.mandatory_confirmation" type="checkbox">强制确认</label><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-danger" type="button" @click="removeStep(index)">删除</button></div><div v-if="!stepDrafts.length" class="empty">暂无工艺节点</div></div></div></div>
     </div>
   `
 });
@@ -1353,11 +1488,163 @@ const SettingsPage = defineComponent({
           </div>
           <div class="master-actions">
             <button class="btn btn-sm btn-secondary" type="button" @click="load">刷新</button>
-            <button v-if="canCreate" class="btn btn-sm btn-primary" type="button" @click="startCreate">新增</button>
+            <button v-if="canCreate && !(selected === 'equipment' && equipmentFactory)" class="btn btn-sm btn-primary" type="button" @click.prevent.stop="isCategoryResource(selected) ? startCategoryCreate() : startCreate()">{{ isCategoryResource(selected) && materialCategoryParent ? '新增小类' : '新增' }}</button>
           </div>
         </div>
         <div v-if="error" class="master-error">{{ error }}</div>
-        <form v-if="creating" class="master-form" @submit.prevent="submitCreate">
+        <div v-if="categoryNotice" class="master-notice">{{ categoryNotice }}</div>
+        <form v-if="creating && selected === 'equipment'" class="equipment-modal-mask" @submit.prevent="submitCreate">
+          <div class="equipment-modal">
+            <div class="equipment-modal-header">
+              <div>
+                <div class="modal-title">{{ editingItem ? '编辑酿造系统' : '新增酿造系统' }}</div>
+                <div class="modal-subtitle">维护糖化参数，并配置该系统下的发酵罐和清酒罐</div>
+              </div>
+              <button class="equipment-close" type="button" aria-label="关闭" @click="creating = false">×</button>
+            </div>
+            <div class="equipment-modal-body">
+              <label v-if="false">
+                <span><i>*</i>所属工厂</span>
+                <select v-model="draft.brew_factory_id" required>
+                  <option value="">请选择工厂</option>
+                  <option v-for="item in factories" :key="item.id" :value="item.id">{{ item.name }}</option>
+                </select>
+              </label>
+              <label v-if="false">
+                <span><i>*</i>设备类型</span>
+                <div class="equipment-type-control">
+                  <select v-model="draft.brew_equipment_type" required @change="handleEquipmentTypeChange">
+                    <option value="">请选择设备类型</option>
+                    <option v-for="item in equipmentTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                  </select>
+                  <input v-model.trim="newEquipmentType" placeholder="请输入">
+                  <button class="btn btn-secondary" type="button" @click="addEquipmentType">添加类型</button>
+                </div>
+              </label>
+              <label>
+                <span><i>*</i>酿造系统名称</span>
+                <input v-model.trim="draft.name" maxlength="100" required placeholder="例如：铜陵厂 · 5000L 酿造系统">
+              </label>
+              <label>
+                <span><i>*</i>糖化最大体积(L)</span>
+                <div class="equipment-number-control">
+                  <button type="button" @click="adjustEquipmentNumber('brew_capacity_l', -1)">−</button>
+                  <input v-model.number="draft.brew_capacity_l" type="number" min="0" step="1" required>
+                  <em>L</em>
+                  <button type="button" @click="adjustEquipmentNumber('brew_capacity_l', 1)">＋</button>
+                </div>
+              </label>
+              <template v-if="['fermentation', 'bright'].includes(draft.brew_equipment_type)">
+                <label>
+                  <span><i>*</i>数量</span>
+                  <div class="equipment-number-control equipment-count-control">
+                    <button type="button" @click="adjustTankCount(-1)">−</button>
+                    <input v-model.number="draft.brew_tank_count" type="number" min="1" step="1" required @input="syncTankSpecs">
+                    <em>个</em>
+                    <button type="button" @click="adjustTankCount(1)">＋</button>
+                  </div>
+                </label>
+                <div class="tank-specs-section">
+                  <div class="equipment-section-title">{{ draft.brew_equipment_type === 'fermentation' ? '发酵罐配置' : '清酒罐配置' }}</div>
+                  <div v-for="(tank, index) in draft.tank_specs" :key="index" class="tank-spec-row">
+                    <span class="tank-spec-index">{{ index + 1 }}</span>
+                    <input v-model.trim="tank.name" placeholder="罐号，如 F-01" required>
+                    <input :value="tank.location_name || autoTankLocation(tank, index)" readonly placeholder="保存后自动生成库存位置">
+                    <button v-if="draft.tank_specs.length > 1" type="button" class="tank-remove" @click="removeTankSpec(index)">×</button>
+                  </div>
+                  <button type="button" class="tank-add" @click="addTankSpec">＋ 添加罐体</button>
+                </div>
+              </template>
+              <template v-if="draft.brew_equipment_type === 'mash'">
+                <div class="equipment-section-title">配套罐体</div>
+                <div class="equipment-section-hint">罐体隶属于当前酿造系统；库存位置会根据厂区、系统名称和罐号自动生成。</div>
+                <div class="system-tank-group">
+                  <div class="system-tank-group-header"><strong>发酵罐</strong><span>用于啤酒发酵与成熟</span></div>
+                  <div class="system-tank-specs">
+                    <div v-for="tank in draft.tank_specs.filter(item => item.tank_type === 'fermentation')" :key="tank._key || tank.name" class="system-tank-row">
+                      <span class="tank-spec-index">发</span>
+                      <input v-model.trim="tank.name" placeholder="罐号，如 F-01" required>
+                      <input v-model.number="tank.capacity_l" type="number" min="1" placeholder="容量(L)" required>
+                      <input v-model.trim="tank.location_name" :placeholder="autoTankLocation(tank, draft.tank_specs.indexOf(tank))">
+                      <button type="button" class="tank-remove" aria-label="删除发酵罐" @click="removeSystemTank(tank)">×</button>
+                    </div>
+                    <button type="button" class="tank-add" @click="addSystemTank('fermentation')">＋ 添加发酵罐</button>
+                  </div>
+                </div>
+                <div class="system-tank-group">
+                  <div class="system-tank-group-header"><strong>清酒罐</strong><span>用于储酒与待灌装</span></div>
+                  <div class="system-tank-specs">
+                    <div v-for="tank in draft.tank_specs.filter(item => item.tank_type === 'bright')" :key="tank._key || tank.name" class="system-tank-row">
+                      <span class="tank-spec-index">清</span>
+                      <input v-model.trim="tank.name" placeholder="罐号，如 BBT-01" required>
+                      <input v-model.number="tank.capacity_l" type="number" min="1" placeholder="容量(L)" required>
+                      <input v-model.trim="tank.location_name" :placeholder="autoTankLocation(tank, draft.tank_specs.indexOf(tank))">
+                      <button type="button" class="tank-remove" aria-label="删除清酒罐" @click="removeSystemTank(tank)">×</button>
+                    </div>
+                    <button type="button" class="tank-add" @click="addSystemTank('bright')">＋ 添加清酒罐</button>
+                  </div>
+                </div>
+              </template>
+              <template v-if="draft.brew_equipment_type === 'mash'">
+                <div class="equipment-section-title">技术参数</div>
+                <div class="equipment-tech-grid">
+                <label><span>糖化效率(%)</span><div class="equipment-number-control"><button type="button" @click="adjustEquipmentNumber('brew_saccharification_efficiency', -1)">−</button><input v-model.number="draft.brew_saccharification_efficiency" type="number" min="0" step="0.1"><button type="button" @click="adjustEquipmentNumber('brew_saccharification_efficiency', 1)">＋</button></div></label>
+                <label><span>筛板余水(L)</span><div class="equipment-number-control"><button type="button" @click="adjustEquipmentNumber('brew_screen_water_l', -1)">−</button><input v-model.number="draft.brew_screen_water_l" type="number" min="0" step="0.1"><button type="button" @click="adjustEquipmentNumber('brew_screen_water_l', 1)">＋</button></div></label>
+                <label><span>回旋时间(分钟)</span><div class="equipment-number-control"><button type="button" @click="adjustEquipmentNumber('brew_whirlpool_time_min', -1)">−</button><input v-model.number="draft.brew_whirlpool_time_min" type="number" min="0" step="1"><button type="button" @click="adjustEquipmentNumber('brew_whirlpool_time_min', 1)">＋</button></div></label>
+                <label><span>过滤速度(L/min)</span><div class="equipment-number-control"><button type="button" @click="adjustEquipmentNumber('brew_filtration_speed_l_min', -1)">−</button><input v-model.number="draft.brew_filtration_speed_l_min" type="number" min="0" step="0.1"><button type="button" @click="adjustEquipmentNumber('brew_filtration_speed_l_min', 1)">＋</button></div></label>
+                </div>
+              </template>
+            </div>
+            <div class="equipment-modal-footer">
+              <button class="btn btn-secondary" type="button" @click="creating = false">取消</button>
+              <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
+            </div>
+          </div>
+        </form>
+        <form v-else-if="creating && isCategoryResource(selected)" class="equipment-modal-mask" @submit.prevent="submitCreate">
+          <div class="equipment-modal material-category-modal">
+            <div class="equipment-modal-header">
+              <div>
+                <div class="modal-title">{{ editingItem ? (isBeerCategory(selected) ? '编辑啤酒分类' : '编辑原料种类') : (materialCategoryParent ? '新增小类' : (isBeerCategory(selected) ? '新增啤酒大类' : '新增原料大类')) }}</div>
+                <div class="modal-subtitle">{{ materialCategoryParent ? '所属大类：' + materialCategoryParent.name : (isBeerCategory(selected) ? '先建立啤酒大类，再配置该大类下的小分类' : '先建立原料大类，再配置该大类下的小类') }}</div>
+              </div>
+              <button class="equipment-close" type="button" aria-label="关闭" @click="creating = false">×</button>
+            </div>
+            <div class="equipment-modal-body material-category-form">
+              <label><span><i>*</i>名称</span><input v-model.trim="draft.name" maxlength="100" required placeholder="请输入名称"></label>
+              <div class="auto-code-field"><span>系统编码</span><strong>{{ draft.code || '保存时自动生成' }}</strong><small>由系统自动生成，不可编辑</small></div>
+              <label v-if="!materialCategoryParent && !isBeerCategory(selected)"><span><i>*</i>原料大类</span><select v-model="draft.material_group" required><option value="">请选择大类</option><option v-for="option in materialGroupOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+              <div v-else-if="materialCategoryParent" class="material-category-parent"><span>所属大类</span><strong>{{ materialCategoryParent.name }}</strong></div>
+              <label><span>排序</span><input v-model.number="draft.sequence" type="number" min="0" step="1"></label>
+            </div>
+            <div class="equipment-modal-footer">
+              <button class="btn btn-secondary" type="button" @click="creating = false">取消</button>
+              <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : (editingItem ? '保存' : '保存并配置小类') }}</button>
+            </div>
+          </div>
+        </form>
+        <form v-else-if="creating && selected === 'warehouses'" class="equipment-modal-mask" @submit.prevent="submitCreate">
+          <div class="equipment-modal material-category-modal">
+            <div class="equipment-modal-header"><div><div class="modal-title">{{ editingItem ? '编辑仓库' : '新增仓库' }}</div><div class="modal-subtitle">{{ editingItem ? '修改仓库基础信息' : '为厂区增加一个独立仓库' }}</div></div><button class="equipment-close" type="button" @click="creating = false">×</button></div>
+            <div class="equipment-modal-body material-category-form"><label><span><i>*</i>所属厂区</span><select v-model="draft.brew_factory_id" required :disabled="!!editingItem"><option value="">请选择厂区</option><option v-for="item in factories" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span><i>*</i>仓库类型</span><select v-model="draft.brew_warehouse_type" required><option value="">请选择仓库类型</option><option v-for="option in warehouseTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label><span><i>*</i>仓库名称</span><input v-model.trim="draft.name" maxlength="100" required placeholder="例如：原料仓库"></label><div class="auto-code-field"><span>仓库编码</span><strong>{{ draft.code || '保存时自动生成' }}</strong><small>由系统自动生成，不可编辑</small></div></div>
+            <div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : (editingItem ? '保存修改' : '保存') }}</button></div>
+          </div>
+        </form>
+        <form v-if="locationCreating" class="equipment-modal-mask" @submit.prevent="submitLocation">
+          <div class="equipment-modal material-category-modal">
+            <div class="equipment-modal-header"><div><div class="modal-title">{{ locationEditing ? '编辑库位' : '新增库位' }}</div><div class="modal-subtitle">{{ warehouseSelected?.name }} · 设置仓库内的存放位置</div></div><button class="equipment-close" type="button" @click="locationCreating = false">×</button></div>
+            <div class="equipment-modal-body material-category-form"><label><span><i>*</i>库位名称</span><input v-model.trim="locationDraft.name" maxlength="100" required placeholder="例如：麦芽区、发酵罐 F-01"></label><label><span><i>*</i>库位类型</span><select v-model="locationDraft.brew_location_type" required><option value="">请选择类型</option><option v-for="option in locationTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label></div>
+            <div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="locationCreating = false">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : (locationEditing ? '保存修改' : '保存库位') }}</button></div>
+          </div>
+        </form>
+        <div v-if="locationDetail" class="equipment-modal-mask" @click.self="locationDetail = null">
+          <div class="equipment-modal material-category-modal">
+            <div class="equipment-modal-header"><div><div class="modal-title">库位详情</div><div class="modal-subtitle">查看库位基础信息</div></div><button class="equipment-close" type="button" @click="locationDetail = null">×</button></div>
+            <div class="equipment-modal-body detail-grid"><div class="detail-field"><span>所属厂区</span><strong>{{ warehouseFactory?.name || '—' }}</strong></div><div class="detail-field"><span>仓库名称</span><strong>{{ warehouseSelected?.name || '—' }}</strong></div><div class="detail-field"><span>仓库编号</span><strong>{{ warehouseSelected?.code || '—' }}</strong></div><div class="detail-field"><span>库位名称</span><strong>{{ locationDetail.location_name || locationDetail.name }}</strong></div><div class="detail-field"><span>库位编号</span><strong>{{ locationDetail.location_code || ('LOC-' + String(locationDetail.id).padStart(6, '0')) }}</strong></div><div class="detail-field"><span>库位类型</span><strong>{{ locationDetail.tank ? tankTypeLabel(locationDetail.tank.tank_type) : warehouseLocationTypeLabel(locationDetail.brew_location_type) }}</strong></div><template v-if="locationDetail.tank"><div class="detail-section-title detail-field-wide">关联罐体</div><div class="detail-field"><span>罐号</span><strong>{{ locationDetail.tank.name }}</strong></div><div class="detail-field"><span>罐体类型</span><strong>{{ tankTypeLabel(locationDetail.tank.tank_type) }}</strong></div><div class="detail-field"><span>罐体容量</span><strong>{{ locationDetail.tank.capacity_l || 0 }} L</strong></div><div class="detail-field"><span>所属设备</span><strong>{{ locationDetail.tank.equipment_name || '—' }}</strong></div><div class="detail-field"><span>罐体状态</span><strong>{{ tankStatusLabel(locationDetail.tank.status) }}</strong></div></template><div class="detail-field"><span>状态</span><strong>{{ locationDetail.active === false ? '已停用' : '已启用' }}</strong></div><div class="detail-field"><span>创建时间</span><strong>{{ formatDateTime(locationDetail.created_at) }}</strong></div></div>
+            <div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="locationDetail = null">关闭</button></div>
+          </div>
+        </div>
+        <form v-else-if="creating" class="master-form" @submit.prevent="submitCreate">
           <label v-for="field in currentResource.fields" :key="field.key">
             <span>{{ field.label }}</span>
             <select v-if="field.type === 'select'" v-model="draft[field.key]" :required="field.required !== false">
@@ -1372,16 +1659,111 @@ const SettingsPage = defineComponent({
             <button class="btn btn-sm btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
           </div>
         </form>
-        <div class="panel-body master-list">
+        <div v-if="false && selected === 'equipment'" class="panel-body warehouse-hierarchy">
+          <div class="warehouse-level-nav">
+            <button type="button" :class="['warehouse-level-step', { active: !equipmentFactory, done: !!equipmentFactory }]" @click="goEquipmentLevel('factory')"><span>1</span><strong>厂区</strong><small>{{ equipmentFactory ? equipmentFactory.name : '选择厂区' }}</small></button><i>›</i>
+            <button type="button" :class="['warehouse-level-step', { active: !!equipmentFactory && !equipmentWarehouse, done: !!equipmentWarehouse }]" :disabled="!equipmentFactory" @click="goEquipmentLevel('warehouse')"><span>2</span><strong>仓库</strong><small>{{ equipmentWarehouse ? equipmentWarehouse.name : (equipmentFactory ? '选择仓库' : '待选择') }}</small></button><i>›</i>
+            <button type="button" :class="['warehouse-level-step', { active: !!equipmentWarehouse }]" :disabled="!equipmentWarehouse" @click="goEquipmentLevel('location')"><span>3</span><strong>库位</strong><small>{{ equipmentLocation ? equipmentLocation.name : (equipmentWarehouse ? '选择库位' : '待选择') }}</small></button>
+          </div>
           <div v-if="loading" class="empty">正在加载...</div>
-          <div v-else-if="!items.length" class="empty">暂无数据</div>
+          <template v-else-if="!equipmentFactory"><div class="warehouse-section-heading"><div><strong>选择厂区</strong><span>查看厂区下的设备、仓库和库位</span></div></div><div class="warehouse-factory-grid"><button v-for="row in equipmentFactoryRows" :key="row.factory.id" type="button" class="warehouse-factory-card" @click="openEquipmentFactory(row.factory)"><div class="warehouse-card-icon">设</div><div class="warehouse-card-main"><strong>{{ row.factory.name }}</strong><span>{{ row.equipmentCount }} 个设备 · {{ row.warehouseCount }} 个仓库</span></div><em>→</em></button></div></template>
+          <template v-else-if="!equipmentWarehouse"><div class="warehouse-section-heading"><div><strong>{{ equipmentFactory.name }} -- 仓库设置</strong><span>选择仓库查看对应库位设备</span></div></div><div class="warehouse-card-grid"><button v-for="warehouse in equipmentFactoryWarehouses" :key="warehouse.id" type="button" class="warehouse-card" @click="openEquipmentWarehouse(warehouse)"><div><strong>{{ warehouse.name }}</strong><span>{{ warehouse.code || '标准仓库' }}</span></div><b>{{ equipmentWarehouseLocations(warehouse).length }}<small> 个库位</small></b></button></div><div v-if="!equipmentFactoryWarehouses.length" class="empty">该厂区暂无仓库</div><div v-if="equipmentFactoryGeneral.length" class="warehouse-location-panel"><div class="warehouse-section-heading"><div><strong>厂区设备</strong><span>糖化设备等不绑定具体罐位的设备</span></div></div><div class="warehouse-location-grid"><div v-for="item in equipmentFactoryGeneral" :key="item.id" class="warehouse-location-card"><span class="location-dot"></span><div><strong>{{ item.name }}</strong><small>{{ equipmentTypeLabel(item.brew_equipment_type) }} · {{ item.brew_capacity_l || 0 }} L</small></div><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button></div></div></div></template>
+          <template v-else-if="!equipmentLocation"><div class="warehouse-section-heading"><div><strong>{{ equipmentFactory.name }} -- {{ equipmentWarehouse.name }} -- 库位设置</strong><span>选择库位查看对应罐体设备</span></div></div><div class="warehouse-location-grid"><button v-for="location in equipmentWarehouseLocations(equipmentWarehouse)" :key="location.id" type="button" class="warehouse-location-card warehouse-location-button" @click="openEquipmentLocation(location)"><span class="location-dot"></span><div><strong>{{ location.name }}</strong><small>{{ warehouseLocationTypeLabel(location.brew_location_type) }} · {{ equipmentLocationEquipment(location).length }} 个关联设备</small></div></button></div><div v-if="!equipmentWarehouseLocations(equipmentWarehouse).length" class="empty">该仓库暂无库位</div></template>
+          <template v-else><div class="warehouse-section-heading"><div><strong>{{ equipmentFactory.name }} -- {{ equipmentWarehouse.name }} -- {{ equipmentLocation.name }}</strong><span>该库位对应的发酵罐、清酒罐设备</span></div><button v-if="canCreate" class="btn btn-sm btn-primary" type="button" @click="startCreate">＋ 新增设备</button></div><div v-if="!equipmentLocationEquipment(equipmentLocation).length" class="empty">该库位暂无关联设备</div><div v-else class="warehouse-location-grid"><div v-for="item in equipmentLocationEquipment(equipmentLocation)" :key="item.id" class="warehouse-location-card"><span class="location-dot"></span><div><strong>{{ item.name }}</strong><small>{{ equipmentTypeLabel(item.brew_equipment_type) }} · {{ item.brew_capacity_l || 0 }} L</small></div><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button></div></div></template>
+        </div>
+        <div v-if="false && selected === 'equipment'" class="panel-body warehouse-hierarchy">
+          <div class="warehouse-level-nav equipment-level-nav">
+            <button type="button" :class="['warehouse-level-step', { active: !equipmentFactory, done: !!equipmentFactory }]" @click="goEquipmentLevel('factory')"><span>1</span><strong>厂区</strong><small>{{ equipmentFactory ? equipmentFactory.name : '选择厂区' }}</small></button><i>›</i>
+            <button type="button" :class="['warehouse-level-step', { active: !!equipmentFactory }]" :disabled="!equipmentFactory" @click="goEquipmentLevel('equipment')"><span>2</span><strong>设备</strong><small>{{ equipmentFactory ? '查看设备列表' : '待选择' }}</small></button>
+          </div>
+          <div v-if="loading" class="empty">正在加载...</div>
+          <template v-else-if="!equipmentFactory"><div class="warehouse-section-heading"><div><strong>选择厂区</strong><span>查看该厂区下的生产设备</span></div></div><div class="warehouse-factory-grid"><button v-for="row in equipmentFactoryRows" :key="row.factory.id" type="button" class="warehouse-factory-card" @click="openEquipmentFactory(row.factory)"><div class="warehouse-card-icon">设</div><div class="warehouse-card-main"><strong>{{ row.factory.name }}</strong><span>{{ row.equipmentCount }} 个设备</span></div><em>→</em></button></div></template>
+          <template v-else><div class="warehouse-section-heading"><div><strong>{{ equipmentFactory.name }} -- 设备设置</strong><span>该厂区下的生产设备</span></div><button v-if="canCreate" class="btn btn-sm btn-primary" type="button" @click="startCreate">＋ 新增设备</button></div><div v-if="!equipmentFactoryEquipment.length" class="empty">该厂区暂无设备</div><div v-else class="equipment-card-list"><div v-for="item in equipmentFactoryEquipment" :key="item.id" class="equipment-card-row"><span :class="['equipment-card-status', item.active === false ? 'archived' : (item.brew_status === 'disabled' ? 'disabled' : '')]">{{ equipmentStatusLabel(item.brew_status, item.active) }}</span><div class="equipment-card-mark">{{ equipmentTypeLabel(item.brew_equipment_type).slice(0, 1) }}</div><div class="equipment-card-info"><strong>{{ item.name }}</strong><span>{{ equipmentTypeLabel(item.brew_equipment_type) }} · {{ item.brew_capacity_l || 0 }} L</span></div><div class="equipment-card-meta"><small>{{ item.brew_equipment_type === 'fermentation' || item.brew_equipment_type === 'bright' ? (item.tank_specs?.length || 0) + ' 个罐体' : '技术设备' }}</small><button v-if="canCreate && item.active !== false" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button><button v-if="canCreate && item.active !== false" class="btn btn-xs btn-outline" type="button" @click="toggleEquipmentStatus(item)">{{ item.brew_status === 'disabled' ? '启用' : '停用' }}</button><button v-if="canCreate && item.active === false" class="btn btn-xs btn-outline" type="button" @click="changeEquipmentState(item, 'restore')">恢复</button><button v-if="canCreate && item.active !== false" class="btn btn-xs btn-danger" type="button" @click="changeEquipmentState(item, 'archive', true)">删除</button></div></div></div></template>
+        </div>
+        <div v-if="selected === 'equipment'" class="panel-body warehouse-hierarchy equipment-system-view">
+          <div class="warehouse-level-nav equipment-level-nav">
+            <button type="button" :class="['warehouse-level-step', { active: !equipmentFactory, done: !!equipmentFactory }]" @click="goEquipmentLevel('factory')"><span>1</span><strong>厂区</strong><small>{{ equipmentFactory ? equipmentFactory.name : '选择厂区' }}</small></button><i>›</i>
+            <button type="button" :class="['warehouse-level-step', { active: !!equipmentFactory }]" :disabled="!equipmentFactory" @click="goEquipmentLevel('equipment')"><span>2</span><strong>酿造系统</strong><small>{{ equipmentFactory ? '查看系统与罐体' : '待选择' }}</small></button>
+          </div>
+          <div v-if="loading" class="empty">正在加载...</div>
+          <template v-else-if="!equipmentFactory"><div class="warehouse-section-heading"><div><strong>选择厂区</strong><span>查看厂区下的酿造系统</span></div></div><div class="warehouse-factory-grid"><button v-for="row in equipmentFactoryRows" :key="row.factory.id" type="button" class="warehouse-factory-card" @click="openEquipmentFactory(row.factory)"><div class="warehouse-card-icon">酿</div><div class="warehouse-card-main"><strong>{{ row.factory.name }}</strong><span>{{ items.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(row.factory.id) && item.brew_equipment_type === 'mash').length }} 套酿造系统</span></div><em>→</em></button></div></template>
           <template v-else>
-            <div v-for="item in items" :key="item.id" class="master-row">
+            <div class="warehouse-section-heading"><div><strong>{{ equipmentFactory.name }} -- 酿造系统</strong><span>先新增酿造系统，再在系统下配置发酵罐和清酒罐</span></div><button v-if="canCreate" class="btn btn-sm btn-primary" type="button" @click="startCreate">＋ 新增酿造系统</button></div>
+            <div v-if="!equipmentFactorySystems.length" class="equipment-system-empty"><strong>还没有酿造系统</strong><span>请先新增一套酿造系统，再添加配套罐体</span><button v-if="canCreate" class="btn btn-sm btn-primary" type="button" @click="startCreate">＋ 新增酿造系统</button></div>
+            <div v-for="system in equipmentFactorySystems" :key="system.id" class="equipment-system-card">
+              <div class="equipment-system-card-header"><div class="equipment-card-mark">酿</div><div class="equipment-system-title"><strong>{{ system.name }}</strong><span>{{ system.brew_capacity_l || '—' }} L 糖化最大体积 · 糖化效率 {{ system.brew_saccharification_efficiency || '—' }}%</span></div><span :class="['equipment-card-status', system.active === false ? 'archived' : (system.brew_status === 'disabled' ? 'disabled' : '')]">{{ equipmentStatusLabel(system.brew_status, system.active) }}</span><button class="btn btn-xs btn-outline" type="button" @click="toggleSystemExpanded(system.id)">{{ isSystemExpanded(system.id) ? '收起罐体' : '查看罐体' }}</button><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-outline" type="button" @click.stop="startEdit(system)">编辑系统</button><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-outline" type="button" @click.stop="toggleEquipmentStatus(system)">{{ system.brew_status === 'disabled' ? '启用' : '停用' }}</button><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-danger" type="button" @click.stop="changeEquipmentState(system, 'archive', true)">删除</button></div>
+              <div class="equipment-system-params"><div class="equipment-system-param"><span>筛板余水</span><strong>{{ system.brew_screen_water_l || '—' }}<em>L</em></strong></div><div class="equipment-system-param"><span>回旋时间</span><strong>{{ system.brew_whirlpool_time_min || '—' }}<em>分钟</em></strong></div><div class="equipment-system-param"><span>过滤速度</span><strong>{{ system.brew_filtration_speed_l_min || '—' }}<em>L/min</em></strong></div></div>
+              <div v-if="isSystemExpanded(system.id)" class="equipment-tank-groups"><section class="equipment-tank-group"><div class="equipment-tank-group-header"><strong>发酵罐</strong><span>{{ (system.tank_specs || []).filter(tank => tank.tank_type === 'fermentation').length }} 个</span><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-outline" type="button" @click="startAddSystemTank(system, 'fermentation')">＋ 添加发酵罐</button></div><div v-for="tank in (system.tank_specs || []).filter(tank => tank.tank_type === 'fermentation')" :key="tank.id || tank.name" class="equipment-tank-card"><div class="equipment-tank-icon">发</div><div><strong>{{ tank.name }}</strong><span>{{ tank.capacity_l || '—' }} L · {{ tank.location_name || '库存位置自动生成' }}</span></div><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-outline" type="button" @click="startEdit(system)">编辑</button></div></section><section class="equipment-tank-group"><div class="equipment-tank-group-header"><strong>清酒罐</strong><span>{{ (system.tank_specs || []).filter(tank => tank.tank_type === 'bright').length }} 个</span><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-outline" type="button" @click="startAddSystemTank(system, 'bright')">＋ 添加清酒罐</button></div><div v-for="tank in (system.tank_specs || []).filter(tank => tank.tank_type === 'bright')" :key="tank.id || tank.name" class="equipment-tank-card"><div class="equipment-tank-icon bright">清</div><div><strong>{{ tank.name }}</strong><span>{{ tank.capacity_l || '—' }} L · {{ tank.location_name || '库存位置自动生成' }}</span></div><button v-if="canCreate && system.active !== false" class="btn btn-xs btn-outline" type="button" @click="startEdit(system)">编辑</button></div></section></div>
+            </div>
+            <div v-if="equipmentFactoryOther.length" class="equipment-legacy-section"><div class="equipment-tank-group-header"><strong>其他独立设备</strong><span>历史设备记录</span></div><div class="equipment-card-list"><div v-for="item in equipmentFactoryOther" :key="item.id" class="equipment-card-row"><div class="equipment-card-mark">设</div><div class="equipment-card-info"><strong>{{ item.name }}</strong><span>{{ equipmentTypeLabel(item.brew_equipment_type) }} · {{ item.brew_capacity_l || 0 }} L</span></div><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button></div></div></div>
+          </template>
+        </div>
+        <div v-if="isCategoryResource(selected)" class="panel-body master-list material-category-list">
+          <div class="material-category-toolbar">
+            <button v-if="materialCategoryParent" class="btn btn-sm btn-secondary" type="button" @click="clearMaterialCategoryParent">← 返回大类</button>
+            <div class="material-category-heading">
+              <span class="material-category-breadcrumb">{{ materialCategoryParent ? materialCategoryParent.name + ' · 小类' : (isBeerCategory(selected) ? '啤酒大类' : '原料大类') }}</span>
+              <span class="material-category-hint">{{ materialCategoryParent ? (isBeerCategory(selected) ? '管理当前啤酒大类下的小分类' : '管理当前大类下的具体原料种类') : '选择一个大类查看或编辑它的小类' }}</span>
+            </div>
+          </div>
+          <div v-if="loading" class="empty">正在加载...</div>
+          <div v-else-if="!materialCategoryRows.length" class="empty">暂无数据</div>
+          <template v-else>
+            <div v-for="item in materialCategoryRows" :key="item.id" draggable="true" class="material-category-card" :class="{ clickable: !materialCategoryParent }" @dragstart="startCategoryDrag(item)" @dragover.prevent @drop.prevent="dropCategory(item)" @click="!materialCategoryParent && openMaterialCategory(item)">
+              <div>
+                <div class="material-category-card-title">{{ item.name }}</div>
+                <div class="task-desc">{{ item.code }}<template v-if="!isBeerCategory(selected)"> · {{ materialGroupLabel(item.material_group) }}</template></div>
+                <div v-if="!materialCategoryParent" class="material-category-count">{{ materialCategoryChildCount(item.id) }} 个小类</div>
+                <div v-else class="material-category-count">排序 {{ item.sequence || 0 }}</div>
+              </div>
+              <span :class="['material-category-card-status', item.active === false ? 'muted' : 'enabled']">{{ item.active === false ? '已停用' : '已启用' }}</span>
+              <div class="master-actions">
+                <button v-if="!materialCategoryParent" class="btn btn-xs btn-outline" type="button" @click.stop="openMaterialCategory(item)">查看小类 →</button>
+                <button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click.stop="startEdit(item)">编辑</button>
+                <button v-if="canCreate && item.active !== false" class="btn btn-xs btn-outline" type="button" @click.stop="changeCategoryState(item, 'archive')">停用</button>
+                <button v-if="canCreate && item.active === false" class="btn btn-xs btn-outline" type="button" @click.stop="changeCategoryState(item, 'restore')">启用</button>
+                <button v-if="canCreate && item.active !== false" class="btn btn-xs btn-danger" type="button" @click.stop="changeCategoryState(item, 'archive', true)">删除</button>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div v-else-if="selected === 'warehouses'" class="panel-body warehouse-hierarchy">
+          <div class="warehouse-level-nav">
+            <button type="button" :class="['warehouse-level-step', { active: !warehouseFactory, done: !!warehouseFactory }]" @click="goWarehouseLevel('factory')"><span>1</span><strong>厂区</strong><small>{{ warehouseFactory ? warehouseFactory.name : '选择厂区' }}</small></button>
+            <i>›</i>
+            <button type="button" :class="['warehouse-level-step', { active: !!warehouseFactory && !warehouseSelected, done: !!warehouseSelected }]" :disabled="!warehouseFactory" @click="goWarehouseLevel('warehouse')"><span>2</span><strong>仓库</strong><small>{{ warehouseSelected ? warehouseSelected.name : (warehouseFactory ? '选择仓库' : '待选择') }}</small></button>
+            <i>›</i>
+            <button type="button" :class="['warehouse-level-step', { active: !!warehouseSelected }]" :disabled="!warehouseSelected" @click="goWarehouseLevel('location')"><span>3</span><strong>库位</strong><small>{{ warehouseSelected ? '查看库位列表' : '待选择' }}</small></button>
+          </div>
+          <div v-if="loading" class="empty">正在加载...</div>
+          <template v-else-if="!warehouseFactory">
+            <div class="warehouse-section-heading"><div><strong>厂区仓储总览</strong><span>点击厂区查看该厂区下的仓库和库位</span></div></div>
+            <div class="warehouse-factory-grid">
+              <button v-for="row in warehouseFactoryRows" :key="row.factory.id" type="button" class="warehouse-factory-card" @click="openWarehouseFactory(row.factory)">
+                <div class="warehouse-card-icon">仓</div><div class="warehouse-card-main"><strong>{{ row.factory.name }}</strong><span>{{ row.factory.code || '未设置编码' }}</span></div><div class="warehouse-card-count"><b>{{ row.warehouseCount }}</b><small>个仓库</small><b>{{ row.locationCount }}</b><small>个库位</small></div><em>→</em>
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <template v-if="!warehouseSelected">
+              <div class="warehouse-section-heading"><div><strong>{{ warehouseFactory.name }} -- 仓库设置</strong><span>{{ warehouseFactoryRows.find(row => row.factory.id === warehouseFactory.id)?.warehouseCount || 0 }} 个仓库</span></div></div>
+              <div v-if="!warehouseFactoryRows.find(row => row.factory.id === warehouseFactory.id)?.warehouses.length" class="empty">该厂区暂无仓库</div>
+              <div v-else class="warehouse-card-grid"><div v-for="warehouse in warehouseFactoryRows.find(row => row.factory.id === warehouseFactory.id).warehouses" :key="warehouse.id" class="warehouse-card" @click="openWarehouse(warehouse)"><div class="warehouse-card-icon">仓</div><div class="warehouse-card-main"><strong>{{ warehouse.name }}</strong><span>{{ warehouseTypeLabel(warehouse.brew_warehouse_type) }}</span></div><b>{{ warehouseLocationCount(warehouse) }}<small>个库位</small></b><div class="warehouse-card-actions"><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click.stop="startEdit(warehouse)">编辑</button><button v-if="canCreate && warehouse.brew_warehouse_type !== 'tank'" class="btn btn-xs btn-outline" type="button" @click.stop="toggleWarehouseStatus(warehouse)">{{ warehouse.active === false ? '启用' : '停用' }}</button><button v-if="canCreate && warehouse.brew_warehouse_type !== 'tank'" class="btn btn-xs btn-danger" type="button" @click.stop="changeMasterState('warehouses', warehouse, 'archive', true)">删除</button></div></div></div>
+            </template>
+            <div v-else class="warehouse-location-panel"><div class="warehouse-section-heading"><div><strong>{{ warehouseFactory.name }} -- {{ warehouseSelected.name }} -- 库位设置</strong><span>该仓库下的库存存放位置</span></div><button v-if="canCreate" class="btn btn-sm btn-primary" type="button" @click="startLocationCreate">＋ 新增库位</button></div><div v-if="!warehouseLocationsFor(warehouseSelected).length" class="empty">该仓库暂无库位</div><div v-else class="warehouse-location-grid"><div v-for="location in warehouseLocationsFor(warehouseSelected)" :key="location.id" class="warehouse-location-card" @click="openLocationDetail(location)"><span class="location-dot"></span><div><strong>{{ location.location_name || location.name }}</strong><small>{{ location.tank ? tankTypeLabel(location.tank.tank_type) + ' · ' + location.tank.name : warehouseLocationTypeLabel(location.brew_location_type) }} · {{ location.active === false ? '已停用' : '已启用' }}</small></div><div class="warehouse-card-actions"><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click.stop="editLocation(location)">编辑</button><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click.stop="toggleLocationStatus(location)">{{ location.active === false ? '启用' : '停用' }}</button><button v-if="canCreate" class="btn btn-xs btn-danger" type="button" @click.stop="changeMasterState('locations', location, 'archive', true)">删除</button></div></div></div></div>
+          </template>
+        </div>
+        <div v-else-if="selected !== 'equipment' && !isCategoryResource(selected)" class="panel-body master-list">
+          <div v-if="loading" class="empty">正在加载...</div>
+          <div v-else-if="!displayedItems.length" class="empty">暂无数据</div>
+          <template v-else>
+            <div v-for="item in displayedItems" :key="item.id" class="master-row">
               <div>
                 <div class="task-title">{{ item.name }}</div>
                 <div class="task-desc">{{ describe(item) }}</div>
               </div>
               <div class="master-actions">
+                <button v-if="selected === 'equipment' && canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button>
                 <button v-if="currentResource.rule && canCreate && item.state !== 'active'" class="btn btn-xs btn-outline" type="button" @click="changeRuleState(item, 'activate')">启用</button>
                 <button v-if="currentResource.rule && canCreate && item.state === 'active'" class="btn btn-xs btn-secondary" type="button" @click="changeRuleState(item, 'deactivate')">停用</button>
                 <span :class="['master-state', item.active === false || item.state === 'inactive' ? 'muted' : 'enabled']">
@@ -1399,12 +1781,13 @@ const SettingsPage = defineComponent({
     const factoryField = { key: "brew_factory_id", label: "所属厂区", type: "select", options: "factories" };
     const resources = [
       { code: "factories", label: "厂区", desc: "企业内厂区、编码和地址", fields: [...commonFields, { key: "code", label: "厂区编码" }, { key: "address", label: "地址", required: false }] },
-      { code: "equipment", label: "设备", desc: "生产设备容量与运行状态", fields: [...commonFields, factoryField, { key: "brew_equipment_type", label: "设备类型", type: "select", values: [["mash","糖化"],["fermentation","发酵"],["bright","清酒"],["packaging","包装"],["centrifuge","离心"],["cleaning","清洗"],["other","其他"]] }, { key: "brew_capacity_l", label: "容量(L)", type: "number" }] },
+      { code: "equipment", label: "设备", desc: "生产设备容量、技术参数与运行状态", fields: [...commonFields, factoryField, { key: "brew_equipment_type", label: "设备类型", type: "select", values: [["mash","糖化"],["fermentation","发酵"],["bright","清酒"],["packaging","包装"],["centrifuge","离心"],["cleaning","清洗"],["other","其他"]] }, { key: "brew_capacity_l", label: "容量(L)", type: "number" }] },
       { code: "tanks", label: "罐体", desc: "发酵罐、清酒罐和清洗状态", fields: [...commonFields, { ...factoryField, key: "factory_id" }, { key: "tank_type", label: "罐体类型", type: "select", values: [["fermentation","发酵罐"],["bright","清酒罐"]] }, { key: "capacity_l", label: "容量(L)", type: "number" }] },
-      { code: "warehouses", label: "仓库", desc: "厂区创建时自动建立的标准仓库", readonly: true, fields: [] },
-      { code: "locations", label: "库位", desc: "原料、包装、待检、半成品、成品和损耗库位", fields: [...commonFields, factoryField, { key: "brew_location_type", label: "库位类型", type: "select", values: [["raw_material","原料"],["packaging","包装"],["qc","待检"],["semi_finished","半成品"],["finished","成品"],["loss","损耗"]] }] },
+      { code: "warehouses", label: "仓库", desc: "按厂区管理仓库，并查看仓库下的库位", fields: [...commonFields, factoryField, { key: "code", label: "仓库编码" }] },
       { code: "products", label: "产品", desc: "半成品和成品主数据", fields: [...commonFields, { key: "default_code", label: "产品编码" }, { key: "brew_item_type", label: "产品类型", type: "select", values: [["semi_finished","半成品"],["finished_product","成品"]] }, { key: "brew_specification", label: "规格", required: false }] },
       { code: "materials", label: "物料", desc: "原料与包装物标准主数据", fields: [...commonFields, { key: "default_code", label: "物料编码" }, { key: "brew_item_type", label: "物料类型", type: "select", values: [["raw_material","原料"],["packaging_material","包装物"]] }, { key: "brew_material_category", label: "原料分类", type: "select", values: [["malt","麦芽"],["hop","酒花"],["yeast","酵母"],["adjunct","辅料"],["packaging","包装物"]] }, { key: "brew_shelf_life_days", label: "保质期(天)", type: "number", required: false }] },
+      { code: "material-categories", label: "原料种类", desc: "系统级原料大类和细分类，不绑定厂区", fields: [...commonFields, { key: "code", label: "种类编码" }, { key: "material_group", label: "原料大类", type: "select", values: [["malt","麦芽"],["hop","啤酒花"],["yeast","酵母"],["adjunct","其他可发酵物"],["packaging","包装材料"]] }, { key: "parent_id", label: "所属大类", type: "select", required: false }, { key: "sequence", label: "排序", type: "number", required: false }] },
+      { code: "beer-categories", label: "啤酒分类", desc: "系统级啤酒大类和小分类，不绑定厂区", fields: [...commonFields, { key: "code", label: "分类编码" }, { key: "parent_id", label: "所属大类", type: "select", required: false }, { key: "sequence", label: "排序", type: "number", required: false }] },
       { code: "suppliers", label: "供应商", desc: "供应商联系信息与供货品类", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "brew_supply_category", label: "供货品类", required: false }] },
       { code: "customers", label: "客户", desc: "客户联系信息与等级", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "brew_customer_level", label: "客户等级", type: "select", values: [["normal","普通"],["key","重点"],["vip","VIP"]] }] },
       { code: "number-rules", label: "编号规则", desc: "单据编号和批次编码版本", rule: true, fields: [...commonFields, { key: "code", label: "规则编码" }, { key: "config", label: "规则配置(JSON)", type: "textarea" }] },
@@ -1414,22 +1797,92 @@ const SettingsPage = defineComponent({
     ];
     const selected = ref("factories");
     const items = ref([]);
+    const equipmentItems = ref([]);
     const factories = ref([]);
+    const materialCategories = ref([]);
+    const materialCategoryParent = ref(null);
+    const warehouseLocations = ref([]);
+    const warehouseFactory = ref(null);
+    const warehouseSelected = ref(null);
+    const locationCreating = ref(false);
+    const locationEditing = ref(null);
+    const locationDetail = ref(null);
+    const locationDraft = ref({ name: "", brew_location_type: "" });
+    const locationTypeOptions = [
+      { value: "raw_material", label: "原料" }, { value: "packaging", label: "包装" }, { value: "qc", label: "待检" },
+      { value: "semi_finished", label: "半成品" }, { value: "finished", label: "成品" }, { value: "loss", label: "损耗" }
+    ];
+    const warehouseTypeOptions = [
+      { value: "raw_material", label: "原料仓" }, { value: "packaging", label: "包装物仓" },
+      { value: "semi_finished", label: "半成品仓" }, { value: "finished", label: "成品仓" },
+      { value: "qc", label: "待检仓" }, { value: "loss", label: "损耗仓" }, { value: "tank", label: "罐体仓" }
+    ];
+    const categoryNotice = ref("");
+    const draggedCategory = ref(null);
+    const materialGroupOptions = [
+      { value: "malt", label: "麦芽" }, { value: "hop", label: "啤酒花" }, { value: "yeast", label: "酵母" },
+      { value: "adjunct", label: "其他可发酵物" }, { value: "packaging", label: "包装材料" }
+    ];
+    const equipmentFactoryFilter = ref("");
+    const equipmentFactory = ref(null);
+    const expandedSystems = ref(new Set());
+    const equipmentWarehouse = ref(null);
+    const equipmentLocation = ref(null);
+    const equipmentWarehouses = ref([]);
+    const equipmentLocations = ref([]);
+    const editingItem = ref(null);
+    const equipmentTypeOptions = ref([
+      { value: "mash", label: "酿造系统" },
+      { value: "fermentation", label: "发酵罐" },
+      { value: "bright", label: "清酒罐" },
+      { value: "other", label: "其他" }
+    ]);
+    const newEquipmentType = ref("");
     const loading = ref(false);
     const saving = ref(false);
     const creating = ref(false);
     const error = ref("");
     const draft = ref({});
     const currentResource = computed(() => resources.find(item => item.code === selected.value));
+    function isCategoryResource(code) { return ["material-categories", "beer-categories"].includes(code); }
+    function isBeerCategory(code) { return code === "beer-categories"; }
+    const materialCategoryRows = computed(() => {
+      if (!isCategoryResource(selected.value)) return [];
+      return materialCategories.value
+        .filter(item => materialCategoryParent.value ? Number(item.parent_id?.id || item.parent_id || 0) === Number(materialCategoryParent.value.id) : !item.parent_id)
+        .sort((a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0) || String(a.name).localeCompare(String(b.name), "zh-CN"));
+    });
+    const displayedItems = computed(() => {
+      if (selected.value !== "equipment" || !equipmentFactoryFilter.value) return items.value;
+      return items.value.filter(item => String(item.brew_factory_id?.id || "") === String(equipmentFactoryFilter.value));
+    });
+    const warehouseFactoryRows = computed(() => factories.value.map(factory => {
+      const warehouses = items.value.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(factory.id));
+      const locationCount = warehouses.reduce((total, warehouse) => total + warehouseLocationsFor(warehouse).length, 0);
+      return { factory, warehouses, warehouseCount: warehouses.length, locationCount };
+    }));
+    const equipmentFactoryWarehouses = computed(() => equipmentWarehouses.value.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(equipmentFactory.value?.id || 0)));
+    const equipmentFactoryGeneral = computed(() => items.value.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(equipmentFactory.value?.id || 0) && !(item.tank_specs || []).length));
+    const equipmentFactoryRows = computed(() => factories.value.map(factory => ({
+      factory,
+      equipmentCount: items.value.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(factory.id)).length,
+      warehouseCount: equipmentWarehouses.value.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(factory.id)).length
+    })));
+    const equipmentFactoryEquipment = computed(() => items.value.filter(item => Number(item.brew_factory_id?.id || item.brew_factory_id || 0) === Number(equipmentFactory.value?.id || 0)));
+    const equipmentFactorySystems = computed(() => equipmentFactoryEquipment.value.filter(item => item.brew_equipment_type === "mash"));
+    const equipmentFactoryOther = computed(() => equipmentFactoryEquipment.value.filter(item => item.brew_equipment_type !== "mash"));
     const writePermissions = {
       factories: ["base.master_data.manage"],
       equipment: ["base.master_data.manage", "base.equipment.manage"],
       tanks: ["base.master_data.manage", "base.equipment.manage"],
+      warehouses: ["base.master_data.manage"],
       locations: ["base.master_data.manage", "base.location.manage"],
       products: ["base.master_data.manage", "base.product.manage"],
       materials: ["base.master_data.manage", "base.product.manage", "base.material.manage"],
+      "material-categories": ["admin.user.manage"],
       suppliers: ["base.master_data.manage", "base.supplier.manage"],
       customers: ["base.master_data.manage", "base.customer.manage"],
+      "beer-categories": ["base.master_data.manage", "base.beer_category.manage"],
       "number-rules": ["base.master_data.manage"],
       "barcode-rules": ["base.master_data.manage"],
       "alert-rules": ["base.master_data.manage"],
@@ -1447,9 +1900,23 @@ const SettingsPage = defineComponent({
         const current = currentResource.value;
         items.value = current.rule
           ? await brewApi.listRules(current.code)
-          : await brewApi.listMaster(current.code, { page_size: 100 });
+        : await brewApi.listMaster(current.code, { page_size: 100, active: true });
+        if (current.code === "warehouses") {
+          warehouseLocations.value = await brewApi.listMaster("locations", { page_size: 500 });
+          equipmentItems.value = await brewApi.listMaster("equipment", { page_size: 500, active: true });
+        }
+        if (current.code === "equipment") {
+          equipmentWarehouses.value = await brewApi.listMaster("warehouses", { page_size: 200, active: true });
+          equipmentLocations.value = await brewApi.listMaster("locations", { page_size: 500 });
+        }
         if (current.code !== "factories" && !factories.value.length) {
           factories.value = await brewApi.listMaster("factories", { page_size: 100, active: true });
+        }
+        if (["materials", "material-categories"].includes(current.code) || !materialCategories.value.length) {
+          materialCategories.value = await brewApi.listMaster("material-categories", { page_size: 200 });
+        }
+        if (current.code === "beer-categories") {
+          materialCategories.value = await brewApi.listMaster("beer-categories", { page_size: 200 });
         }
       } catch (cause) {
         error.value = cause.message || "数据加载失败。";
@@ -1460,20 +1927,193 @@ const SettingsPage = defineComponent({
 
     function selectResource(code) {
       selected.value = code;
+      materialCategoryParent.value = null;
+      categoryNotice.value = "";
+      warehouseFactory.value = null;
+      warehouseSelected.value = null;
+      equipmentFactory.value = null;
+      equipmentWarehouse.value = null;
+      equipmentLocation.value = null;
       creating.value = false;
+      editingItem.value = null;
       items.value = [];
       load();
     }
 
     function startCreate() {
-      draft.value = currentResource.value.rule ? { config: "{}" } : {};
+      draft.value = currentResource.value.code === "equipment"
+          ? { brew_factory_id: equipmentFactory.value?.id || equipmentFactoryFilter.value || "", brew_equipment_type: "mash", name: "", brew_capacity_l: "", brew_tank_volume_l: "", brew_tank_count: 0, tank_specs: [], brew_saccharification_efficiency: 0, brew_screen_water_l: 0, brew_whirlpool_time_min: 0, brew_filtration_speed_l_min: 0 }
+        : (currentResource.value.code === "warehouses"
+          ? { brew_factory_id: warehouseFactory.value?.id || "", brew_warehouse_type: "", name: "", code: "" }
+        : (isCategoryResource(currentResource.value.code)
+          ? { name: "", code: generateCategoryCode(isBeerCategory(currentResource.value.code) ? "beer" : "material"), ...(isBeerCategory(currentResource.value.code) ? {} : { material_group: materialCategoryParent.value?.material_group || "" }), parent_id: materialCategoryParent.value?.id || "", sequence: 10 }
+          : (currentResource.value.rule ? { config: "{}" } : {})));
+      newEquipmentType.value = "";
+      editingItem.value = null;
+      creating.value = true;
+      error.value = "";
+      categoryNotice.value = "";
+    }
+
+    function startCategoryCreate() {
+      const beerCategory = isBeerCategory(selected.value);
+      draft.value = {
+        name: "",
+        code: generateCategoryCode(beerCategory ? "beer" : "material"),
+        ...(beerCategory ? {} : { material_group: materialCategoryParent.value?.material_group || "" }),
+        parent_id: materialCategoryParent.value?.id || "",
+        sequence: 10
+      };
+      editingItem.value = null;
+      creating.value = true;
+      error.value = "";
+      categoryNotice.value = "";
+    }
+
+    function startEdit(item) {
+      if (isCategoryResource(currentResource.value.code)) {
+        draft.value = { name: item.name || "", code: item.code || "", ...(isBeerCategory(currentResource.value.code) ? {} : { material_group: item.material_group || "" }), parent_id: item.parent_id?.id || item.parent_id || "", sequence: item.sequence || 10, version: item.version };
+        editingItem.value = item;
+        creating.value = true;
+        error.value = "";
+        categoryNotice.value = "";
+        return;
+      }
+      if (currentResource.value.code === "warehouses") {
+        draft.value = {
+          version: item.version,
+          brew_factory_id: item.brew_factory_id?.id || item.brew_factory_id || "",
+          brew_warehouse_type: item.brew_warehouse_type || "",
+          name: item.name || "",
+          code: item.code || ""
+        };
+        editingItem.value = item;
+        creating.value = true;
+        error.value = "";
+        return;
+      }
+      const typeValue = item.brew_equipment_type_custom
+        ? `custom:${item.brew_equipment_type_custom}`
+        : (item.brew_equipment_type || "");
+      if (item.brew_equipment_type_custom && !equipmentTypeOptions.value.some(option => option.value === typeValue)) {
+        equipmentTypeOptions.value.push({ value: typeValue, label: item.brew_equipment_type_custom });
+      }
+      draft.value = {
+        version: item.version,
+        brew_factory_id: item.brew_factory_id?.id || "",
+        brew_equipment_type: typeValue,
+        brew_equipment_type_custom: item.brew_equipment_type_custom || "",
+        name: item.name || "",
+        brew_capacity_l: item.brew_capacity_l || 0,
+        brew_tank_volume_l: item.brew_tank_volume_l || 0,
+        brew_tank_count: item.brew_tank_count || item.tank_specs?.length || 1,
+        tank_specs: (item.tank_specs || []).map(tank => ({ tank_type: tank.tank_type || (item.brew_equipment_type === "bright" ? "bright" : "fermentation"), name: tank.name || "", location_name: tank.location_name || "", capacity_l: tank.capacity_l || item.brew_tank_volume_l || 0 })),
+        brew_saccharification_efficiency: item.brew_saccharification_efficiency || 0,
+        brew_screen_water_l: item.brew_screen_water_l || 0,
+        brew_whirlpool_time_min: item.brew_whirlpool_time_min || 0,
+        brew_filtration_speed_l_min: item.brew_filtration_speed_l_min || 0
+      };
+      newEquipmentType.value = "";
+      if (["fermentation", "bright"].includes(typeValue)) syncTankSpecs();
+      editingItem.value = item;
       creating.value = true;
       error.value = "";
     }
 
+    function addEquipmentType() {
+      const label = newEquipmentType.value.trim();
+      if (!label) return;
+      const value = `custom:${label}`;
+      if (!equipmentTypeOptions.value.some(item => item.value === value)) equipmentTypeOptions.value.push({ value, label });
+      draft.value.brew_equipment_type = value;
+      newEquipmentType.value = "";
+    }
+
+    function handleEquipmentTypeChange() {
+      if (["fermentation", "bright"].includes(draft.value.brew_equipment_type)) syncTankSpecs();
+    }
+
+    function syncTankSpecs() {
+      const count = Math.max(1, Number(draft.value.brew_tank_count) || 1);
+      const specs = Array.isArray(draft.value.tank_specs) ? draft.value.tank_specs : [];
+      while (specs.length < count) specs.push({ name: "", location_name: "", capacity_l: Number(draft.value.brew_tank_volume_l) || 0 });
+      draft.value.tank_specs = specs.slice(0, count).map(item => ({ ...item, capacity_l: Number(draft.value.brew_tank_volume_l) || Number(item.capacity_l) || 0 }));
+      draft.value.brew_tank_count = count;
+    }
+
+    function adjustTankCount(delta) {
+      draft.value.brew_tank_count = Math.max(1, (Number(draft.value.brew_tank_count) || 1) + delta);
+      syncTankSpecs();
+    }
+
+    function addTankSpec() {
+      draft.value.brew_tank_count = (Number(draft.value.brew_tank_count) || 0) + 1;
+      syncTankSpecs();
+    }
+
+    function addSystemTank(type = "fermentation") {
+      draft.value.tank_specs.push({ tank_type: type, name: "", location_name: "", capacity_l: "" });
+      draft.value.brew_tank_count = draft.value.tank_specs.length;
+    }
+
+    function removeSystemTank(tank) {
+      const index = draft.value.tank_specs.indexOf(tank);
+      if (index >= 0) draft.value.tank_specs.splice(index, 1);
+      draft.value.brew_tank_count = draft.value.tank_specs.length;
+    }
+
+    function startAddSystemTank(system, type) {
+      startEdit(system);
+      addSystemTank(type);
+    }
+
+    function isSystemExpanded(systemId) {
+      return expandedSystems.value.has(String(systemId));
+    }
+
+    function toggleSystemExpanded(systemId) {
+      const next = new Set(expandedSystems.value);
+      const key = String(systemId);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      expandedSystems.value = next;
+    }
+
+    function autoTankLocation(tank, index = 0) {
+      const factory = factories.value.find(item => Number(item.id) === Number(draft.value.brew_factory_id));
+      const factoryName = factory?.name || "厂区";
+      const systemName = String(draft.value.name || "酿造系统").trim();
+      const tankName = String(tank?.name || `罐${index + 1}`).trim();
+      return `${factoryName}-${systemName}-${tankName}`;
+    }
+
+    function removeTankSpec(index) {
+      draft.value.tank_specs.splice(index, 1);
+      draft.value.brew_tank_count = draft.value.tank_specs.length;
+    }
+
+    function adjustEquipmentNumber(field, delta) {
+      const current = Number(draft.value[field]) || 0;
+      draft.value[field] = Math.max(0, Number((current + delta).toFixed(2)));
+    }
+
     function optionsFor(field) {
       if (field.options === "factories") return factories.value.map(item => ({ value: item.id, label: item.name }));
+      if (isCategoryResource(currentResource.value.code) && field.key === "parent_id") return materialCategories.value.filter(item => !item.parent_id).map(item => ({ value: item.id, label: item.name }));
+      if (field.key === "brew_material_category") return materialCategories.value.map(item => ({ value: item.code, label: item.name }));
       return (field.values || []).map(([value, label]) => ({ value, label }));
+    }
+
+    function generateMaterialCategoryCode(group = "category") {
+      const suffix = window.crypto?.randomUUID ? window.crypto.randomUUID().replaceAll("-", "").slice(0, 12) : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      return `material_${group || "category"}_${suffix}`;
+    }
+    function generateCategoryCode(prefix = "category") {
+      const suffix = window.crypto?.randomUUID ? window.crypto.randomUUID().replaceAll("-", "").slice(0, 12) : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      return `${prefix}_category_${suffix}`;
+    }
+    function generateWarehouseCode(type = "warehouse") {
+      const suffix = window.crypto?.randomUUID ? window.crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase() : Date.now().toString(36).slice(-6).toUpperCase();
+      return `WH-${type.slice(0, 3).toUpperCase()}-${suffix}`;
     }
 
     async function submitCreate() {
@@ -1482,6 +2122,39 @@ const SettingsPage = defineComponent({
       try {
         const current = currentResource.value;
         const payload = { ...draft.value };
+        const isCategory = isCategoryResource(current.code);
+        const isNewTopCategory = isCategory && !editingItem.value && !payload.parent_id;
+        if (isCategory && !editingItem.value) payload.code = generateCategoryCode(isBeerCategory(current.code) ? "beer" : "material");
+        if (current.code === "warehouses" && !editingItem.value) payload.code = generateWarehouseCode(payload.brew_warehouse_type);
+        if (current.code === "equipment" && String(payload.brew_equipment_type).startsWith("custom:")) {
+          payload.brew_equipment_type_custom = payload.brew_equipment_type.slice(7);
+          payload.brew_equipment_type = "other";
+        } else if (current.code === "equipment") {
+          payload.brew_equipment_type_custom = "";
+        }
+        if (current.code === "equipment" && payload.brew_equipment_type === "mash") {
+          payload.brew_tank_count = (payload.tank_specs || []).length;
+          payload.brew_tank_volume_l = 0;
+          const invalidSystemTank = (payload.tank_specs || []).find((item) => !["fermentation", "bright"].includes(item.tank_type) || !String(item.name || "").trim() || Number(item.capacity_l) <= 0);
+          if (invalidSystemTank) throw new Error("请填写酿造系统下每个发酵罐/清酒罐的类型、罐号和容量。");
+          payload.tank_specs = (payload.tank_specs || []).map((item, index) => ({ ...item, location_name: item.location_name || autoTankLocation(item, index) }));
+        } else if (current.code === "equipment" && ["fermentation", "bright"].includes(payload.brew_equipment_type)) {
+          // 发酵罐/清酒罐表单填写的是“设备体积”，提交时同步为后台使用的“罐体体积”。
+          payload.brew_tank_volume_l = Number(payload.brew_tank_volume_l) || Number(payload.brew_capacity_l) || 0;
+          payload.brew_tank_count = Number(payload.brew_tank_count) || 1;
+          if (payload.brew_tank_volume_l <= 0) throw new Error("请填写发酵罐或清酒罐体积。");
+          const invalidTank = (payload.tank_specs || []).find((item) => !String(item.name || "").trim());
+          if (invalidTank) throw new Error("请填写每个罐体的罐号。");
+          payload.tank_specs = (payload.tank_specs || []).slice(0, payload.brew_tank_count).map(item => ({
+            ...item,
+            location_name: item.location_name || autoTankLocation(item),
+            capacity_l: Number(payload.brew_tank_volume_l) || 0
+          }));
+        } else if (current.code === "equipment") {
+          payload.tank_specs = [];
+          payload.brew_tank_count = 0;
+          payload.brew_tank_volume_l = 0;
+        }
         current.fields.filter(field => field.type === "number").forEach((field) => {
           if (payload[field.key] !== undefined && payload[field.key] !== "") payload[field.key] = Number(payload[field.key]);
         });
@@ -1489,10 +2162,22 @@ const SettingsPage = defineComponent({
           try { payload.config = JSON.parse(payload.config || "{}"); } catch { throw new Error("规则配置必须是有效的 JSON 对象。"); }
           await brewApi.createRule(current.code, payload);
         } else {
-          await brewApi.createMaster(current.code, payload);
+          if (editingItem.value) {
+            await brewApi.updateMaster(current.code, editingItem.value.id, payload);
+          } else {
+            await brewApi.createMaster(current.code, payload);
+          }
         }
         creating.value = false;
+        editingItem.value = null;
         await load();
+        if (isNewTopCategory) {
+          const created = materialCategories.value.find(item => item.code === payload.code);
+          if (created) {
+            materialCategoryParent.value = created;
+            startCreate();
+          }
+        }
       } catch (cause) {
         error.value = cause.message || "保存失败。";
       } finally {
@@ -1513,9 +2198,167 @@ const SettingsPage = defineComponent({
       }
     }
 
+    async function changeEquipmentState(item, action, deleting = false) {
+      if (deleting && !window.confirm(`确定要删除设备“${item.name}”吗？删除后可通过启用恢复。`)) return;
+      saving.value = true;
+      error.value = "";
+      try { await brewApi.masterAction("equipment", item.id, action, item.version); await load(); }
+      catch (cause) { error.value = cause.message || "设备状态更新失败。"; }
+      finally { saving.value = false; }
+    }
+    async function changeCategoryState(item, action, deleting = false) {
+      if (deleting && !window.confirm(`确定要删除分类“${item.name}”吗？删除后可通过启用恢复。`)) return;
+      saving.value = true;
+      error.value = "";
+      try {
+        await brewApi.masterAction(selected.value, item.id, action, item.version);
+        await load();
+      } catch (cause) {
+        error.value = cause.message || "分类状态更新失败。";
+      } finally {
+        saving.value = false;
+      }
+    }
+    async function toggleEquipmentStatus(item) {
+      if (item.active === false) {
+        await changeEquipmentState(item, "restore");
+        return;
+      }
+      saving.value = true;
+      error.value = "";
+      try { await brewApi.updateMaster("equipment", item.id, { brew_status: item.brew_status === "disabled" ? "available" : "disabled", version: item.version }); await load(); }
+      catch (cause) { error.value = cause.message || "设备状态更新失败。"; }
+      finally { saving.value = false; }
+    }
+    function equipmentStatusLabel(status, active = true) { return active === false ? "已删除" : (status === "disabled" ? "已停用" : "已启用"); }
+
     function describe(item) {
       const parts = [item.code, item.default_code, item.brew_specification, item.address, item.phone, item.rule_kind && `版本 ${item.version}`, item.factory_id?.name, item.brew_factory_id?.name].filter(Boolean);
       return parts.join(" · ") || `ID ${item.id}`;
+    }
+
+    function openMaterialCategory(item) { materialCategoryParent.value = item; }
+    function clearMaterialCategoryParent() { materialCategoryParent.value = null; }
+    function materialGroupLabel(value) { return { malt: "麦芽", hop: "啤酒花", yeast: "酵母", adjunct: "其他可发酵物", packaging: "包装材料" }[value] || value; }
+    function materialCategoryChildCount(id) { return materialCategories.value.filter(item => Number(item.parent_id?.id || item.parent_id || 0) === Number(id)).length; }
+    function openWarehouseFactory(factory) { warehouseFactory.value = factory; warehouseSelected.value = null; }
+    function clearWarehouseSelection() { warehouseFactory.value = null; warehouseSelected.value = null; }
+    function openWarehouse(warehouse) { warehouseSelected.value = warehouse; }
+    function goWarehouseLevel(level) {
+      if (level === "factory") clearWarehouseSelection();
+      if (level === "warehouse" && warehouseFactory.value) warehouseSelected.value = null;
+    }
+    function warehouseLocationCount(warehouse) { return warehouseLocationsFor(warehouse).length; }
+    function warehouseLocationsFor(warehouse) {
+      const factoryId = Number(warehouse.brew_factory_id?.id || warehouse.brew_factory_id || 0);
+      const rootId = Number(warehouse.lot_stock_id?.id || warehouse.lot_stock_id || 0);
+      return warehouseLocations.value.filter(item => {
+        const itemFactoryId = Number(item.brew_factory_id?.id || item.brew_factory_id || 0);
+        const parentId = Number(item.location_id?.id || item.location_id || 0);
+        // 仓库的 lot_stock_id 是 Odoo 自动生成的技术根库位，不作为业务库位展示；这里只显示它下面实际配置的库位。
+        return itemFactoryId === factoryId && (!rootId || parentId === rootId) && Number(item.id) !== rootId;
+      });
+    }
+    function startLocationCreate() { locationDraft.value = { name: "", brew_location_type: "" }; locationEditing.value = null; locationCreating.value = true; error.value = ""; }
+    function startLocationEdit(location) {
+      locationDraft.value = { name: location.location_name || location.name || "", brew_location_type: location.brew_location_type || "", version: location.version };
+      locationEditing.value = location;
+      locationCreating.value = true;
+      error.value = "";
+    }
+    function editLocation(location) {
+      if (location.tank?.equipment_id) {
+        const equipment = equipmentItems.value.find(item => Number(item.id) === Number(location.tank.equipment_id));
+        if (equipment) {
+          startEdit(equipment);
+          return;
+        }
+      }
+      startLocationEdit(location);
+    }
+    function openLocationDetail(location) { locationDetail.value = location; }
+    async function submitLocation() {
+      saving.value = true;
+      error.value = "";
+      try {
+        const payload = { ...locationDraft.value, brew_factory_id: warehouseFactory.value.id, usage: "internal" };
+        if (!locationEditing.value) {
+          payload.location_id = warehouseSelected.value.lot_stock_id?.id || warehouseSelected.value.lot_stock_id || "";
+          await brewApi.createMaster("locations", payload);
+        } else {
+          await brewApi.updateMaster("locations", locationEditing.value.id, payload);
+        }
+        locationCreating.value = false;
+        locationEditing.value = null;
+        warehouseLocations.value = await brewApi.listMaster("locations", { page_size: 500 });
+      } catch (cause) { error.value = cause.message || "库位保存失败。"; }
+      finally { saving.value = false; }
+    }
+    function warehouseLocationTypeLabel(value) { return locationTypeOptions.find(option => option.value === value)?.label || value || "普通库位"; }
+    function warehouseTypeLabel(value) { return warehouseTypeOptions.find(option => option.value === value)?.label || value || "仓库"; }
+    function formatDateTime(value) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "—"; }
+    function tankTypeLabel(value) { return ({ fermentation: "发酵罐", bright: "清酒罐" })[value] || value || "罐体"; }
+    function tankStatusLabel(value) { return ({ empty: "空罐", fermenting: "发酵中", conditioning: "后发酵", cold_crash: "冷贮", ready: "待包装", cleaning: "清洗中", maintenance: "维护中", abnormal: "异常" })[value] || value || "未知"; }
+    async function changeMasterState(resource, item, action, deleting = false) {
+      if (deleting && !window.confirm(`确定要删除“${item.name}”吗？删除后将不再显示。`)) return;
+      saving.value = true;
+      error.value = "";
+      try {
+        await brewApi.masterAction(resource, item.id, action, item.version);
+        if (resource === "warehouses") {
+          if (deleting) items.value = items.value.filter(row => Number(row.id) !== Number(item.id));
+          else await load();
+        } else if (deleting) {
+          warehouseLocations.value = warehouseLocations.value.filter(row => Number(row.id) !== Number(item.id));
+        } else {
+          warehouseLocations.value = await brewApi.listMaster("locations", { page_size: 500 });
+        }
+      } catch (cause) { error.value = cause.message || "状态更新失败。"; }
+      finally { saving.value = false; }
+    }
+    function toggleWarehouseStatus(item) { return changeMasterState("warehouses", item, item.active === false ? "restore" : "archive"); }
+    function toggleLocationStatus(item) { return changeMasterState("locations", item, item.active === false ? "restore" : "archive"); }
+    function openEquipmentFactory(factory) { equipmentFactory.value = factory; equipmentWarehouse.value = null; equipmentLocation.value = null; }
+    function openEquipmentWarehouse(warehouse) { equipmentWarehouse.value = warehouse; equipmentLocation.value = null; }
+    function openEquipmentLocation(location) { equipmentLocation.value = location; }
+    function goEquipmentLevel(level) {
+      if (level === "factory") { equipmentFactory.value = null; equipmentWarehouse.value = null; equipmentLocation.value = null; }
+      if (level === "warehouse" && equipmentFactory.value) { equipmentWarehouse.value = null; equipmentLocation.value = null; }
+    }
+    function equipmentWarehouseLocations(warehouse) {
+      const factoryId = Number(warehouse.brew_factory_id?.id || warehouse.brew_factory_id || 0);
+      const rootId = Number(warehouse.lot_stock_id?.id || warehouse.lot_stock_id || 0);
+      return equipmentLocations.value.filter(item => {
+        const itemFactoryId = Number(item.brew_factory_id?.id || item.brew_factory_id || 0);
+        const parentId = Number(item.location_id?.id || item.location_id || 0);
+        return itemFactoryId === factoryId && (!rootId || parentId === rootId) && Number(item.id) !== rootId;
+      });
+    }
+    function equipmentLocationEquipment(location) {
+      return items.value.filter(item => (item.tank_specs || []).some(tank => Number(tank.location_id) === Number(location.id)));
+    }
+    function equipmentTypeLabel(value) { return equipmentTypeOptions.value.find(option => option.value === value)?.label || value || "设备"; }
+    function startCategoryDrag(item) { draggedCategory.value = item; }
+    async function dropCategory(target) {
+      const source = draggedCategory.value;
+      draggedCategory.value = null;
+      if (!source || source.id === target.id) return;
+      const rows = [...materialCategoryRows.value];
+      const from = rows.findIndex(item => item.id === source.id);
+      const to = rows.findIndex(item => item.id === target.id);
+      if (from < 0 || to < 0) return;
+      rows.splice(from, 1);
+      rows.splice(to, 0, source);
+      rows.forEach((item, index) => { item.sequence = (index + 1) * 10; });
+      materialCategories.value = [...materialCategories.value];
+      saving.value = true;
+      try {
+        await Promise.all(rows.map(item => brewApi.updateMaster(selected.value, item.id, { sequence: item.sequence, version: item.version })));
+        categoryNotice.value = "排序已保存。";
+      } catch (cause) {
+        error.value = cause.message || "排序保存失败。";
+        await load();
+      } finally { saving.value = false; }
     }
 
     function stateLabel(state) {
@@ -1523,7 +2366,7 @@ const SettingsPage = defineComponent({
     };
 
     onMounted(load);
-    return { resources, selected, items, loading, saving, creating, error, draft, currentResource, canCreate, load, selectResource, startCreate, optionsFor, submitCreate, changeRuleState, describe, stateLabel };
+    return { resources, selected, items, displayedItems, materialCategoryRows, materialCategoryParent, categoryNotice, materialGroupOptions, warehouseFactoryRows, warehouseFactory, warehouseSelected, locationCreating, locationEditing, locationDetail, locationDraft, locationTypeOptions, warehouseTypeOptions, equipmentFactory, equipmentWarehouse, equipmentLocation, equipmentFactoryRows, equipmentFactoryEquipment, equipmentFactorySystems, equipmentFactoryOther, equipmentFactoryWarehouses, equipmentFactoryGeneral, loading, saving, creating, error, draft, factories, materialCategories, equipmentFactoryFilter, equipmentTypeOptions, newEquipmentType, editingItem, currentResource, canCreate, load, selectResource, startCreate, startCategoryCreate, startEdit, startAddSystemTank, isSystemExpanded, toggleSystemExpanded, addEquipmentType, handleEquipmentTypeChange, syncTankSpecs, adjustTankCount, addTankSpec, addSystemTank, removeSystemTank, autoTankLocation, removeTankSpec, adjustEquipmentNumber, optionsFor, submitCreate, submitLocation, changeRuleState, changeEquipmentState, changeCategoryState, toggleEquipmentStatus, equipmentStatusLabel, describe, stateLabel, openMaterialCategory, clearMaterialCategoryParent, materialGroupLabel, materialCategoryChildCount, startCategoryDrag, dropCategory, openWarehouseFactory, clearWarehouseSelection, openWarehouse, goWarehouseLevel, warehouseLocationCount, warehouseLocationsFor, startLocationCreate, startLocationEdit, editLocation, openLocationDetail, warehouseLocationTypeLabel, warehouseTypeLabel, formatDateTime, tankTypeLabel, tankStatusLabel, changeMasterState, toggleWarehouseStatus, toggleLocationStatus, isCategoryResource, isBeerCategory, openEquipmentFactory, openEquipmentWarehouse, openEquipmentLocation, goEquipmentLevel, equipmentWarehouseLocations, equipmentLocationEquipment, equipmentTypeLabel };
   }
 });
 

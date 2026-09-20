@@ -26,15 +26,16 @@ function idempotencyKey() {
 
 
 async function request(path, options = {}) {
-  const method = options.method || "GET";
+  const { _retryOnCsrf = true, ...fetchOptions } = options;
+  const method = fetchOptions.method || "GET";
   const headers = {
     Accept: "application/json",
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(fetchOptions.body ? { "Content-Type": "application/json" } : {}),
     ...(method !== "GET" && csrfToken() ? { "X-CSRF-Token": csrfToken() } : {}),
-    ...(options.headers || {})
+    ...(fetchOptions.headers || {})
   };
   const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
+    ...fetchOptions,
     method,
     headers,
     credentials: "include"
@@ -47,6 +48,17 @@ async function request(path, options = {}) {
   }
   if (!response.ok || payload.error) {
     const error = payload.error || {};
+    if (error.code === "AUTH_CSRF_INVALID" && method !== "GET" && _retryOnCsrf) {
+      try {
+        const context = await request("/api/v1/auth/me", { _retryOnCsrf: false });
+        if (context.csrf_token) {
+          window.sessionStorage.setItem(CSRF_STORAGE_KEY, context.csrf_token);
+          return request(path, { ...options, _retryOnCsrf: false });
+        }
+      } catch {
+        // 让原始 CSRF 错误继续返回，由页面提示重新登录。
+      }
+    }
     throw new ApiError(
       error.code || `HTTP_${response.status}`,
       error.message || "请求失败。",
@@ -355,6 +367,20 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  updateMaster(resource, id, data) {
+    return request(`/api/v1/${resource}/${id}`, {
+      method: "PATCH",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  masterAction(resource, id, action, version) {
+    return request(`/api/v1/${resource}/${id}/${action}`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify({ version })
+    });
+  },
   listRules(resource) {
     return request(`/api/v1/admin/${resource}`);
   },
@@ -380,6 +406,42 @@ export const brewApi = {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey() },
       body: JSON.stringify(data)
+    });
+  },
+  updateRecipe(id, data) {
+    return request(`/api/v1/recipes/${id}`, {
+      method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  listRecipeVersions(recipeId) {
+    return request(`/api/v1/recipes/${recipeId}/versions`);
+  },
+  getRecipeVersion(versionId) {
+    return request(`/api/v1/recipe-versions/${versionId}`);
+  },
+  createRecipeVersion(recipeId, data) {
+    return request(`/api/v1/recipes/${recipeId}/versions`, {
+      method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  updateRecipeVersion(versionId, data) {
+    return request(`/api/v1/recipe-versions/${versionId}`, {
+      method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  replaceRecipeMaterials(versionId, data) {
+    return request(`/api/v1/recipe-versions/${versionId}/materials`, {
+      method: "PUT", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  replaceRecipeSteps(versionId, data) {
+    return request(`/api/v1/recipe-versions/${versionId}/process-steps`, {
+      method: "PUT", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  recipeVersionAction(versionId, action, recordVersion, reason = "") {
+    return request(`/api/v1/recipe-versions/${versionId}/${action}`, {
+      method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify({ record_version: recordVersion, reason })
     });
   },
   listDemands(params = {}) {
