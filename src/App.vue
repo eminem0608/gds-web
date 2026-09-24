@@ -18,7 +18,7 @@
           {{ authSubmitting ? "登录中..." : "登录" }}
         </button>
         <!--
-        <div v-if="createDesignTab === 'recipe'" class="recipe-select-design-panel"><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'select-f'+index" class="recipe-select-row"><select v-model="line.subcategory"><option value="">选择种类</option><option v-for="item in materialCategoryOptions('malt','adjunct')" :key="item.id" :value="item.code">{{ item.material_group === 'malt' ? '麦芽 · ' : '其他可发酵物 · ' }}{{ item.name }}</option></select><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('malt','adjunct')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="recipe-create-empty">还没有添加原料，从系统分类和物料中选择</div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'select-h'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'select-y'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><input v-model="line.flavor" placeholder="风味描述" readonly><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">理化指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label></div></div></div>
+        <div v-if="createDesignTab === 'recipe'" class="recipe-select-design-panel"><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'select-f'+index" class="recipe-select-row"><button class="recipe-material-picker-button" type="button" @click="openSupplierPicker(line)">{{ line.name || '选择具体供应商麦芽/可发酵物' }}</button><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="recipe-create-empty">还没有添加原料，从系统分类和物料中选择</div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'select-h'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'select-y'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><input v-model="line.flavor" placeholder="风味描述" readonly><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">理化指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label></div></div></div>
         <div v-if="createDesignTab === 'mash'" class="recipe-process-panel"><div class="recipe-process-heading"><strong>糖化工艺设计</strong><span>设置糖化、煮沸和洗糟的目标参数</span></div><div class="recipe-process-grid"><label><span>煮沸强度(%)</span><input v-model.number="designDraft.mash.boil_strength" type="number" step="0.1" placeholder="如 8.5"></label><label><span>水料比(L/KG)</span><input v-model.number="designDraft.mash.water_grain_ratio" type="number" step="0.1" placeholder="如 3.2"></label><label><span>煮沸时长(min)</span><input v-model.number="designDraft.mash.boil_time_min" type="number" placeholder="如 60"></label><label><span>洗糟次数</span><input v-model.number="designDraft.mash.sparge_count" type="number" placeholder="如 2"></label></div><div class="recipe-process-note"><span>工艺说明</span><textarea v-model.trim="designDraft.mash.notes" placeholder="记录糖化温度曲线、升温节点、洗糟终点等要求"></textarea></div></div>
         <div v-if="createDesignTab === 'fermentation'" class="recipe-process-panel"><div class="recipe-process-heading"><strong>发酵工艺设计</strong><span>设置主发酵和冷储的目标条件</span></div><div class="recipe-process-grid"><label><span>目标发酵温度(℃)</span><input v-model.number="designDraft.fermentation.target_temperature" type="number" step="0.1" placeholder="如 18"></label><label><span>目标发酵天数(day)</span><input v-model.number="designDraft.fermentation.target_days" type="number" step="0.5" placeholder="如 7"></label><label><span>冷储温度(℃)</span><input v-model.number="designDraft.fermentation.cold_storage_temperature" type="number" step="0.1" placeholder="如 2"></label></div><div class="recipe-process-note"><span>发酵要求</span><textarea v-model.trim="designDraft.fermentation.notes" placeholder="记录接种量、降温节点、压力控制和冷储要求"></textarea></div></div>
       -->
@@ -92,6 +92,7 @@
         <TracePage v-else-if="currentPage === 'trace'" />
         <ReportsPage v-else-if="currentPage === 'reports'" />
         <SettingsPage v-else-if="currentPage === 'settings'" :permissions="authContext.permissions" />
+        <SupplierCatalogPage v-else-if="currentPage === 'supplier_catalog'" :permissions="authContext.permissions" @toast="showToast" />
         <TasksPage v-else-if="currentPage === 'tasks'" />
       </section>
     </main>
@@ -102,8 +103,9 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, reactive, ref, watch } from "vue";
+import { computed, defineComponent, h, onMounted, onUpdated, reactive, ref, watch } from "vue";
 import { brewApi } from "./api";
+import RecipePage from "./components/RecipePage.vue";
 import { navSections, pageMeta, roles } from "./data";
 
 const currentRole = ref("gm");
@@ -125,6 +127,7 @@ const apiRoleMap = {
   salesperson: "sales",
   finance: "finance",
   tenant_admin: "admin"
+  ,supplier: "supplier"
 };
 
 const currentCompanyName = computed(() => {
@@ -135,7 +138,7 @@ const currentCompanyName = computed(() => {
 });
 
 const roleConfig = computed(() => roles[currentRole.value]);
-const currentMeta = computed(() => pageMeta[currentPage.value]);
+const currentMeta = computed(() => pageMeta[currentPage.value] || pageMeta.tasks);
 
 const visibleNavSections = computed(() => {
   const serverPages = new Set((authContext.value?.menus || []).map(item => item.code));
@@ -945,212 +948,6 @@ const ProductionPage = defineComponent({
   `
 });
 
-const recipeDesignMarkup = `
-    <div v-if="versionDetail" class="recipe-design-panel">
-      <div class="recipe-design-header"><strong>配方设计</strong><span>麦芽与可发酵物、啤酒花、酵母和技术指标</span></div>
-      <div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'f'+index" class="recipe-design-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择物料</option><option v-for="item in designMaterials('malt','adjunct')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model.number="line.extract_rate" type="number" placeholder="浸出率(%)" readonly><input v-model.number="line.color" type="number" placeholder="色度" readonly><input v-model="line.notes" placeholder="备注"><button v-if="canManage" class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="empty">暂无麦芽与可发酵物</div></div>
-      <div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'h'+index" class="recipe-design-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择酒花</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.alpha_acid" type="number" placeholder="Alpha酸(%)" readonly><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><input v-model.number="line.utilization" type="number" placeholder="异构率(%)"><button v-if="canManage" class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div><div v-if="!designDraft.hops.length" class="empty">暂无啤酒花</div></div>
-      <div class="recipe-design-section"><div class="recipe-section-title">酵母 <button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'y'+index" class="recipe-design-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择酵母</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.attenuation" type="number" placeholder="发酵度(%)" readonly><input v-model="line.flavor" placeholder="风味描述" readonly><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><button v-if="canManage" class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div><div v-if="!designDraft.yeast.length" class="empty">暂无酵母</div></div>
-      <div class="recipe-design-section"><div class="recipe-section-title">指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label><label><span>终点残糖(g/L)</span><input v-model.number="designDraft.metrics.final_residual_sugar" type="number" step="0.1"></label><label><span>表观发酵度(%)</span><input v-model.number="designDraft.metrics.apparent_attenuation" type="number" step="0.1"></label><label><span>pH</span><input v-model.number="designDraft.metrics.ph" type="number" step="0.01"></label><label><span>二氧化碳(% m/m)</span><input v-model.number="designDraft.metrics.co2" type="number" step="0.01"></label><label><span>酸度(ml/100ml)</span><input v-model.number="designDraft.metrics.acidity" type="number" step="0.01"></label><label><span>双乙酰(mg/L)</span><input v-model.number="designDraft.metrics.diacetyl" type="number" step="0.01"></label><label><span>浑浊度(NTU)</span><input v-model.number="designDraft.metrics.turbidity" type="number" step="0.1"></label></div></div>
-      <div v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="recipe-design-footer"><button class="btn btn-sm btn-primary" type="button" :disabled="saving" @click="saveVersion">保存配方设计</button></div>
-    </div>`;
-
-const RecipePage = defineComponent({
-  components: { DataTable, StatusTag },
-  props: { permissions: { type: Array, default: () => [] } },
-  setup(props) {
-    const recipes = ref([]);
-    const products = ref([]);
-    const brewSystems = ref([]);
-    const materials = ref([]);
-    const materialCategories = ref([]);
-    const beerCategories = ref([]);
-    const selectedRecipe = ref(null);
-    const versions = ref([]);
-    const versionDetail = ref(null);
-    const materialDrafts = ref([]);
-    const stepDrafts = ref([]);
-    const designDraft = ref({ fermentables: [], hops: [], yeast: [], metrics: {}, mash: {}, fermentation: {} });
-    const loading = ref(false);
-    const saving = ref(false);
-    const creating = ref(false);
-    const createDesignTab = ref("recipe");
-    const calculatedMetrics = computed(() => {
-      const design = designDraft.value;
-      const metrics = design.metrics || {};
-      const fermentables = Array.isArray(design.fermentables) ? design.fermentables : [];
-      const totalQuantity = fermentables.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
-      const originalGravity = Number(metrics.original_gravity) || fermentables.reduce((sum, line) => sum + (Number(line.gravity) || 0), 0);
-      const color = Number(metrics.color_ebc) || fermentables.reduce((sum, line) => sum + (Number(line.color_contribution || line.color) || 0), 0);
-      const ibu = Number(metrics.ibu) || (Array.isArray(design.hops) ? design.hops.reduce((sum, line) => sum + (Number(line.bitterness) || 0), 0) : 0);
-      const attenuation = Number(metrics.apparent_attenuation) || 0;
-      const alcohol = Number(metrics.abv) || (originalGravity && attenuation ? originalGravity * attenuation / 2 : 0);
-      return { totalQuantity, originalGravity, finalGravity: Number(metrics.final_gravity) || 0, color, ibu, alcohol };
-    });
-    const error = ref("");
-    const draft = ref({ code: "", name: "", product_tmpl_id: "", beer_style: "", base_volume_l: 1000, original_gravity: "", final_gravity: "", bitterness_ibu: "", color_ebc: "", alcohol_abv: "", notes: "" });
-    const canManage = computed(() => props.permissions.some(item => ["recipe.version.manage", "base.master_data.manage"].includes(item)));
-    const beerCategoryOptions = computed(() => beerCategories.value.filter(item => !item.parent_id));
-    const beerSubcategoryOptions = computed(() => beerCategories.value.filter(item => Number(item.parent_id?.id || item.parent_id || 0) === Number(draft.value.beer_category_id || 0)));
-    const selectedBrewSystem = computed(() => brewSystems.value.find(item => String(item.id) === String(draft.value.brew_equipment_id)) || null);
-    const columns = [
-      { key: "code", label: "配方编码", mono: true },
-      { key: "name", label: "配方名称" },
-      { key: "beer_style", label: "啤酒风格", format: row => row.beer_style || "-" },
-      { key: "active_version_id", label: "启用版本", format: row => row.active_version_id || "未启用" },
-      { key: "state", label: "状态", tag: true }
-    ];
-
-    async function load() {
-      loading.value = true;
-      error.value = "";
-      try {
-        const [recipeRows, materialRows, materialCategoryRows, beerCategoryRows, equipmentRows] = await Promise.all([
-          brewApi.listRecipes({ page_size: 100 }),
-          brewApi.listMaster("materials", { page_size: 200, active: true }),
-          brewApi.listMaster("material-categories", { page_size: 200, active: true }),
-          brewApi.listMaster("beer-categories", { page_size: 200, active: true }),
-          brewApi.listMaster("equipment", { page_size: 200, active: true })
-        ]);
-        recipes.value = recipeRows.map(item => ({ ...item, state: item.active ? (item.active_version_id ? "使用中" : "待启用") : "已归档" }));
-        materials.value = materialRows;
-        materialCategories.value = materialCategoryRows;
-        beerCategories.value = beerCategoryRows;
-        brewSystems.value = equipmentRows.filter(item => item.brew_equipment_type === "mash");
-      } catch (cause) {
-        error.value = cause.message || "配方加载失败。";
-      } finally {
-        loading.value = false;
-      }
-    }
-
-    function resetDraft() { draft.value = { name: "", product_tmpl_id: "", beer_category_id: "", beer_subcategory_id: "", beer_style: "", base_volume_l: 1000, brew_equipment_id: "", brew_volume_l: 1000, original_gravity: "", final_gravity: "", bitterness_ibu: "", color_ebc: "", alcohol_abv: "", notes: "" }; designDraft.value = emptyDesign(); createDesignTab.value = "recipe"; }
-    function selectBrewSystem() { const max = Number(selectedBrewSystem.value?.brew_capacity_l) || 0; if (max) { draft.value.base_volume_l = max; draft.value.brew_volume_l = max; } else syncBrewVolume(); }
-    function syncBrewVolume() { const max = Number(selectedBrewSystem.value?.brew_capacity_l) || 0; const base = Number(draft.value.base_volume_l) || 0; draft.value.brew_volume_l = max ? Math.min(base || max, max) : (base || ""); }
-    function updateBrewVolume() { const max = Number(selectedBrewSystem.value?.brew_capacity_l) || 0; const volume = Number(draft.value.brew_volume_l) || 0; draft.value.brew_volume_l = max ? Math.min(Math.max(volume, 1), max) : volume; draft.value.base_volume_l = draft.value.brew_volume_l; }
-    function emptyDesign() { return { fermentables: [], hops: [], yeast: [], metrics: { abv: "", color_ebc: "", ibu: "", original_gravity: "", final_residual_sugar: "", ph: "", co2: "", acidity: "", diacetyl: "", turbidity: "", apparent_attenuation: "" }, mash: { boil_strength: "", water_grain_ratio: "", boil_time_min: "", sparge_count: "", steps: [] }, fermentation: { target_temperature: "", target_days: "", cold_storage_temperature: "", notes: "" } }; }
-    function defaultSteps() {
-      return [
-        { sequence: 10, name: "糖化", phase: "mash", action_type: "record", mandatory_confirmation: false, target_duration_hours: "", target_temperature: "", config: {} },
-        { sequence: 20, name: "进罐", phase: "fermentation", action_type: "enter_tank", mandatory_confirmation: true, target_duration_hours: "", target_temperature: "", config: {} },
-        { sequence: 30, name: "转罐", phase: "fermentation", action_type: "transfer", mandatory_confirmation: true, target_duration_hours: "", target_temperature: "", config: {} },
-        { sequence: 40, name: "包装放行", phase: "packaging", action_type: "packaging_release", mandatory_confirmation: true, target_duration_hours: "", target_temperature: "", config: {} }
-      ];
-    }
-    async function submit() {
-      saving.value = true;
-      error.value = "";
-      try {
-        const recipe = await brewApi.createRecipe({ name: draft.value.name, beer_style: draft.value.beer_style, beer_category_id: Number(draft.value.beer_category_id), beer_subcategory_id: Number(draft.value.beer_subcategory_id) });
-        const version = await brewApi.createRecipeVersion(recipe.id, { base_volume_l: Number(draft.value.base_volume_l) || 1000, original_gravity: Number(draft.value.original_gravity) || 0, final_gravity: Number(draft.value.final_gravity) || 0, bitterness_ibu: Number(draft.value.bitterness_ibu) || 0, color_ebc: Number(draft.value.color_ebc) || 0, alcohol_abv: Number(draft.value.alcohol_abv) || 0, notes: draft.value.notes, design: { ...designDraft.value, brew_equipment_id: draft.value.brew_equipment_id, brew_volume_l: Number(draft.value.brew_volume_l) || 0 } });
-        await brewApi.replaceRecipeSteps(version.id, { record_version: version.record_version, process_steps: defaultSteps() });
-        resetDraft();
-        creating.value = false;
-        await load();
-        await openRecipe(recipes.value.find(item => item.id === recipe.id) || recipe);
-      } catch (cause) {
-        error.value = cause.message || "配方保存失败。";
-      } finally {
-        saving.value = false;
-      }
-    }
-
-    async function openRecipe(recipe) {
-      selectedRecipe.value = recipe;
-      versionDetail.value = null;
-      versions.value = await brewApi.listRecipeVersions(recipe.id);
-    }
-    async function openVersion(version) {
-      versionDetail.value = await brewApi.getRecipeVersion(version.id);
-      materialDrafts.value = (versionDetail.value.materials || []).map(item => ({ ...item }));
-      stepDrafts.value = (versionDetail.value.process_steps || []).map(item => ({ ...item }));
-      designDraft.value = { ...emptyDesign(), ...(versionDetail.value.design || {}), metrics: { ...emptyDesign().metrics, ...(versionDetail.value.design?.metrics || {}) }, mash: { ...emptyDesign().mash, ...(versionDetail.value.design?.mash || {}) }, fermentation: { ...emptyDesign().fermentation, ...(versionDetail.value.design?.fermentation || {}) } };
-    }
-    async function createVersion() {
-      if (!selectedRecipe.value) return;
-      saving.value = true; error.value = "";
-      try {
-        const version = await brewApi.createRecipeVersion(selectedRecipe.value.id, { base_volume_l: 1000 });
-        await brewApi.replaceRecipeSteps(version.id, { record_version: version.record_version, process_steps: defaultSteps() });
-        versions.value = await brewApi.listRecipeVersions(selectedRecipe.value.id);
-        await openVersion(versions.value.find(item => Number(item.id) === Number(version.id)) || version);
-      } catch (cause) { error.value = cause.message || "草稿版本创建失败。"; }
-      finally { saving.value = false; }
-    }
-    function addMaterial() { materialDrafts.value.push({ product_id: "", quantity: 0, stage: "mash", notes: "" }); }
-    function removeMaterial(index) { materialDrafts.value.splice(index, 1); }
-    function addStep() { stepDrafts.value.push({ sequence: (stepDrafts.value.length + 1) * 10, name: "", phase: "mash", action_type: "record", mandatory_confirmation: false, target_duration_hours: "", target_temperature: "", config: {} }); }
-    function removeStep(index) { stepDrafts.value.splice(index, 1); }
-    function designMaterials(...categories) { return materials.value.filter(item => categories.includes(item.brew_material_category)); }
-    function materialCategoryOptions(...groups) {
-      return materialCategories.value.filter(item => groups.includes(item.material_group) && item.parent_id);
-    }
-    function fillDesignMaterial(line) {
-      const item = materials.value.find(row => Number(row.id) === Number(line.material_id));
-      if (!item) return;
-      line.name = item.name;
-      line.category = item.brew_material_category || "";
-      line.extract_rate = item.brew_extract_rate || 0;
-      line.attenuation = item.brew_extract_rate || 0;
-      line.color = item.brew_color_ebc || 0;
-      line.alpha_acid = item.brew_alpha_acid || 0;
-      line.flavor = item.brew_flavor_desc || "";
-    }
-    function addDesignLine(type) { designDraft.value[type].push(type === "hops" ? { material_id: "", category: "", name: "", quantity: "", alpha_acid: "", time: "", bitterness: "", utilization: "", notes: "" } : type === "yeast" ? { material_id: "", category: "", name: "", quantity: "", attenuation: "", flavor: "", temperature: "", notes: "" } : { material_id: "", category: "", name: "", quantity: "", ratio: "", extract_rate: "", color: "", notes: "" }); }
-    function removeDesignLine(type, index) { designDraft.value[type].splice(index, 1); }
-    async function saveVersion() {
-      if (!versionDetail.value) return;
-      saving.value = true; error.value = "";
-      try {
-        let current = await brewApi.updateRecipeVersion(versionDetail.value.id, { record_version: versionDetail.value.record_version, base_volume_l: Number(versionDetail.value.base_volume_l), original_gravity: Number(versionDetail.value.original_gravity) || 0, final_gravity: Number(versionDetail.value.final_gravity) || 0, bitterness_ibu: Number(versionDetail.value.bitterness_ibu) || 0, color_ebc: Number(versionDetail.value.color_ebc) || 0, alcohol_abv: Number(versionDetail.value.alcohol_abv) || 0, notes: versionDetail.value.notes || "", design: designDraft.value });
-        if (materialDrafts.value.length) current = await brewApi.replaceRecipeMaterials(versionDetail.value.id, { record_version: current.record_version, materials: materialDrafts.value.map((item, index) => ({ ...item, sequence: (index + 1) * 10, quantity: Number(item.quantity) || 0 })) });
-        if (stepDrafts.value.length) current = await brewApi.replaceRecipeSteps(versionDetail.value.id, { record_version: current.record_version, process_steps: stepDrafts.value.map((item, index) => ({ ...item, sequence: (index + 1) * 10, target_duration_hours: item.target_duration_hours === "" ? null : Number(item.target_duration_hours), target_temperature: item.target_temperature === "" ? null : Number(item.target_temperature) })) });
-        await openVersion(current);
-        versions.value = await brewApi.listRecipeVersions(selectedRecipe.value.id);
-      } catch (cause) { error.value = cause.message || "配方工艺保存失败。"; }
-      finally { saving.value = false; }
-    }
-    async function versionAction(action) {
-      saving.value = true; error.value = "";
-      try { await brewApi.recipeVersionAction(versionDetail.value.id, action, versionDetail.value.record_version); await openRecipe(selectedRecipe.value); const latest = versions.value.find(item => Number(item.id) === Number(versionDetail.value.id)); if (latest) await openVersion(latest); }
-      catch (cause) { error.value = cause.message || "版本状态更新失败。"; }
-      finally { saving.value = false; }
-    }
-
-    onMounted(load);
-    return { recipes, products, materials, brewSystems, beerCategories, beerCategoryOptions, beerSubcategoryOptions, selectedBrewSystem, selectedRecipe, versions, versionDetail, materialDrafts, stepDrafts, designDraft, calculatedMetrics, loading, saving, creating, createDesignTab, error, draft, canManage, columns, load, submit, resetDraft, syncBrewVolume, openRecipe, openVersion, createVersion, addMaterial, removeMaterial, addStep, removeStep, designMaterials, materialCategoryOptions, fillDesignMaterial, addDesignLine, removeDesignLine, saveVersion, versionAction };
-  },
-  template: `${recipeDesignMarkup}
-    <div class="panel">
-      <div class="panel-header">
-        <div><div class="panel-title">配方版本库</div><div class="panel-subtitle">生产计划只能引用已启用的具体版本</div></div>
-        <div class="master-actions"><button class="btn btn-sm btn-secondary" @click="load">刷新</button><button v-if="canManage" class="btn btn-sm btn-primary" @click="resetDraft(); creating = true">新建配方工艺</button></div>
-      </div>
-      <div v-if="error" class="master-error">{{ error }}</div>
-      <form v-if="creating" class="equipment-modal-mask" @submit.prevent="submit">
-       <div class="equipment-modal recipe-create-modal"><div class="equipment-modal-header"><div><div class="modal-title">新增配方工艺</div><div class="modal-subtitle">完成基础信息、原料配方和工艺指标后保存为草稿版本</div></div><button class="equipment-close" type="button" @click="creating = false">×</button></div><div class="equipment-modal-body recipe-create-body">
-        <label><span>啤酒名称</span><input v-model.trim="draft.name" placeholder="请输入啤酒名称" required></label>
-        <label><span>啤酒分类</span><select v-model="draft.beer_category_id" required @change="draft.beer_subcategory_id = ''"><option value="">请选择啤酒大类</option><option v-for="item in beerCategoryOptions" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-        <label><span>啤酒种类</span><select v-model="draft.beer_subcategory_id" required :disabled="!draft.beer_category_id"><option value="">{{ draft.beer_category_id ? '请选择啤酒小类' : '请先选择啤酒大类' }}</option><option v-for="item in beerSubcategoryOptions" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-        <label><span>使用设备</span><select v-model="draft.brew_equipment_id" required @change="selectBrewSystem"><option value="">请选择酿造系统</option><option v-for="item in brewSystems" :key="item.id" :value="item.id">{{ item.name }} · 最大 {{ item.brew_capacity_l || '—' }} L</option></select></label>
-        <label><span>酿造体积(L)</span><input v-model.number="draft.brew_volume_l" type="number" min="1" :max="selectedBrewSystem?.brew_capacity_l || undefined" required @input="updateBrewVolume"><small v-if="selectedBrewSystem" class="recipe-field-hint">最大 {{ selectedBrewSystem.brew_capacity_l }} L</small></label>
-        <label><span>原始糖度(°P)</span><input v-model.number="draft.original_gravity" type="number" step="0.1"></label>
-        <label><span>终点糖度(°P)</span><input v-model.number="draft.final_gravity" type="number" step="0.1"></label>
-        <label><span>苦度(IBU)</span><input v-model.number="draft.bitterness_ibu" type="number" step="0.1"></label>
-        <label><span>色度(EBC)</span><input v-model.number="draft.color_ebc" type="number" step="0.1"></label>
-        <label class="field-wide"><span>工艺备注</span><textarea v-model.trim="draft.notes"></textarea></label>
-        <div v-if="createDesignTab === 'recipe'" class="recipe-calculated-metrics"><div class="recipe-calculated-heading"><strong>配方计算结果</strong><span>根据原料、投放参数和酵母参数自动计算</span></div><div class="recipe-calculated-grid"><div><span>原始糖度(°P)</span><strong>{{ calculatedMetrics.originalGravity ? calculatedMetrics.originalGravity.toFixed(1) : '待计算' }}</strong></div><div><span>终点糖度(°P)</span><strong>{{ calculatedMetrics.finalGravity ? calculatedMetrics.finalGravity.toFixed(1) : '待计算' }}</strong></div><div><span>苦度(IBU)</span><strong>{{ calculatedMetrics.ibu ? calculatedMetrics.ibu.toFixed(1) : '待计算' }}</strong></div><div><span>色度(EBC)</span><strong>{{ calculatedMetrics.color ? calculatedMetrics.color.toFixed(1) : '待计算' }}</strong></div><div><span>酒精度(% ABV)</span><strong>{{ calculatedMetrics.alcohol ? calculatedMetrics.alcohol.toFixed(1) : '待计算' }}</strong></div></div></div>
-        <div v-if="createDesignTab === 'recipe'" class="recipe-select-design-panel"><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加原料</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'select-f'+index" class="recipe-select-row"><select v-model="line.subcategory"><option value="">选择种类</option><option v-for="item in materialCategoryOptions('malt','adjunct')" :key="item.id" :value="item.code">{{ item.material_group === 'malt' ? '麦芽 · ' : '其他可发酵物 · ' }}{{ item.name }}</option></select><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('malt','adjunct')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div><div v-if="!designDraft.fermentables.length" class="recipe-create-empty">还没有添加原料，从系统分类和物料中选择</div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加酒花</button></div><div v-for="(line,index) in designDraft.hops" :key="'select-h'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('hop')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in designDraft.yeast" :key="'select-y'+index" class="recipe-select-row"><select v-model="line.material_id" @change="fillDesignMaterial(line)"><option value="">选择系统物料</option><option v-for="item in designMaterials('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><input v-model="line.flavor" placeholder="风味描述" readonly><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">理化指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label></div></div></div>
-        <div class="recipe-create-tabs"><button type="button" :class="['recipe-create-tab', { active: createDesignTab === 'recipe' }]" @click="createDesignTab = 'recipe'"><span>01</span><strong>配方设计</strong><small>原料与理化指标</small></button><button type="button" :class="['recipe-create-tab', { active: createDesignTab === 'mash' }]" @click="createDesignTab = 'mash'"><span>02</span><strong>糖化工艺设计</strong><small>糖化、煮沸与洗糟</small></button><button type="button" :class="['recipe-create-tab', { active: createDesignTab === 'fermentation' }]" @click="createDesignTab = 'fermentation'"><span>03</span><strong>发酵工艺设计</strong><small>温度、天数与储藏</small></button></div>
-        <div class="recipe-create-design"><div class="recipe-design-header"><strong>配方设计明细</strong><span>保存后可继续编辑草稿版本</span></div><div class="recipe-design-section"><div class="recipe-section-title">麦芽与可发酵物 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('fermentables')">＋ 添加</button></div><div v-for="(line,index) in designDraft.fermentables" :key="'cf'+index" class="recipe-design-row"><input v-model="line.category" placeholder="种类"><input v-model="line.name" placeholder="名称"><input v-model.number="line.quantity" type="number" placeholder="数量(KG)"><input v-model.number="line.ratio" type="number" placeholder="比例(%)"><input v-model.number="line.extract_rate" type="number" placeholder="浸出率(%)"><input v-model.number="line.color" type="number" placeholder="色度"><input v-model="line.notes" placeholder="备注"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('fermentables', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">啤酒花 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('hops')">＋ 添加</button></div><div v-for="(line,index) in designDraft.hops" :key="'ch'+index" class="recipe-design-row"><input v-model="line.category" placeholder="种类"><input v-model="line.name" placeholder="名称"><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.alpha_acid" type="number" placeholder="Alpha酸(%)"><input v-model="line.time" placeholder="投放时间"><input v-model.number="line.bitterness" type="number" placeholder="苦味值"><input v-model.number="line.utilization" type="number" placeholder="异构率(%)"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('hops', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addDesignLine('yeast')">＋ 添加</button></div><div v-for="(line,index) in designDraft.yeast" :key="'cy'+index" class="recipe-design-row"><input v-model="line.category" placeholder="种类"><input v-model="line.name" placeholder="名称"><input v-model.number="line.quantity" type="number" placeholder="数量(G)"><input v-model.number="line.attenuation" type="number" placeholder="发酵度(%)"><input v-model="line.flavor" placeholder="风味描述"><input v-model.number="line.temperature" type="number" placeholder="发酵温度(℃)"><button class="btn btn-xs btn-danger" type="button" @click="removeDesignLine('yeast', index)">删除</button></div></div><div class="recipe-design-section"><div class="recipe-section-title">指标</div><div class="recipe-metrics-grid"><label><span>酒精度(% vol)</span><input v-model.number="designDraft.metrics.abv" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="designDraft.metrics.color_ebc" type="number" step="0.1"></label><label><span>苦味值(IBU)</span><input v-model.number="designDraft.metrics.ibu" type="number" step="0.1"></label><label><span>原麦汁浓度(°P)</span><input v-model.number="designDraft.metrics.original_gravity" type="number" step="0.1"></label><label><span>终点残糖(g/L)</span><input v-model.number="designDraft.metrics.final_residual_sugar" type="number" step="0.1"></label><label><span>表观发酵度(%)</span><input v-model.number="designDraft.metrics.apparent_attenuation" type="number" step="0.1"></label><label><span>pH</span><input v-model.number="designDraft.metrics.ph" type="number" step="0.01"></label><label><span>二氧化碳(% m/m)</span><input v-model.number="designDraft.metrics.co2" type="number" step="0.01"></label><label><span>酸度(ml/100ml)</span><input v-model.number="designDraft.metrics.acidity" type="number" step="0.01"></label><label><span>双乙酰(mg/L)</span><input v-model.number="designDraft.metrics.diacetyl" type="number" step="0.01"></label><label><span>浑浊度(NTU)</span><input v-model.number="designDraft.metrics.turbidity" type="number" step="0.1"></label></div></div></div></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中...' : '保存草稿' }}</button></div></div>
-      </form>
-      <div v-if="loading" class="panel-body empty">正在加载...</div>
-      <div v-else class="panel-body recipe-list"><div v-for="recipe in recipes" :key="recipe.id" class="recipe-card"><div class="recipe-card-main"><strong>{{ recipe.name }}</strong><span>{{ recipe.code }} · {{ recipe.product?.name || '未关联成品' }} · {{ recipe.beer_style || '未设置风格' }}</span></div><StatusTag :text="recipe.state" /><button class="btn btn-xs btn-outline" type="button" @click="openRecipe(recipe)">查看版本</button></div><div v-if="!recipes.length" class="empty">暂无配方，请先新增配方工艺</div></div>
-      <div v-if="selectedRecipe" class="panel recipe-editor"><div class="panel-header"><div><div class="panel-title">{{ selectedRecipe.name }} · 配方版本</div><div class="panel-subtitle">版本发布前可修改；启用后将作为生产计划引用的配方快照</div></div><button v-if="canManage" class="btn btn-sm btn-primary" type="button" @click="createVersion">＋ 新建草稿版本</button></div><div class="recipe-version-list"><button v-for="version in versions" :key="version.id" type="button" :class="['recipe-version-chip', { active: versionDetail?.id === version.id }]" @click="openVersion(version)">{{ version.name }} · {{ ({ draft: '草稿', submitted: '待审核', approved: '已审核', active: '使用中', inactive: '已停用', returned: '已退回' })[version.state] || version.state }}</button></div><div v-if="versionDetail" class="recipe-editor-body"><div class="recipe-editor-toolbar"><strong>{{ versionDetail.name }}</strong><div class="master-actions"><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-sm btn-primary" type="button" @click="saveVersion">保存版本</button><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-sm btn-outline" type="button" @click="versionAction('submit')">提交审核</button><button v-if="canManage && versionDetail.state === 'submitted'" class="btn btn-sm btn-outline" type="button" @click="versionAction('approve')">审核通过</button><button v-if="canManage && versionDetail.state === 'approved'" class="btn btn-sm btn-primary" type="button" @click="versionAction('activate')">启用版本</button><button v-if="canManage && versionDetail.state === 'active'" class="btn btn-sm btn-outline" type="button" @click="versionAction('deactivate')">停用版本</button></div></div><div class="recipe-editor-grid"><label><span>基准产量(L)</span><input v-model.number="versionDetail.base_volume_l" type="number" min="1"></label><label><span>原始糖度(°P)</span><input v-model.number="versionDetail.original_gravity" type="number" step="0.1"></label><label><span>终点糖度(°P)</span><input v-model.number="versionDetail.final_gravity" type="number" step="0.1"></label><label><span>苦度(IBU)</span><input v-model.number="versionDetail.bitterness_ibu" type="number" step="0.1"></label><label><span>色度(EBC)</span><input v-model.number="versionDetail.color_ebc" type="number" step="0.1"></label><label><span>酒精度(% ABV)</span><input v-model.number="versionDetail.alcohol_abv" type="number" step="0.1"></label></div><div class="recipe-editor-section"><div class="recipe-section-title">原料明细<button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addMaterial">＋ 添加原料</button></div><div v-for="(line, index) in materialDrafts" :key="index" class="recipe-line"><select v-model="line.product_id"><option value="">选择原料</option><option v-for="item in materials" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" min="0.001" step="0.001" placeholder="数量"><select v-model="line.stage"><option value="mash">糖化</option><option value="boil">煮沸</option><option value="fermentation">发酵</option><option value="packaging">包装</option></select><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-danger" type="button" @click="removeMaterial(index)">删除</button></div><div v-if="!materialDrafts.length" class="empty">暂无原料，提交审核前至少添加一条</div></div><div class="recipe-editor-section"><div class="recipe-section-title">工艺节点<button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-outline" type="button" @click="addStep">＋ 添加节点</button></div><div v-for="(step, index) in stepDrafts" :key="index" class="recipe-line recipe-step-line"><input v-model.trim="step.name" placeholder="节点名称"><select v-model="step.phase"><option value="mash">糖化</option><option value="boil">煮沸</option><option value="fermentation">发酵</option><option value="packaging">包装</option></select><select v-model="step.action_type"><option value="record">记录</option><option value="enter_tank">进罐确认</option><option value="transfer">转罐确认</option><option value="packaging_release">包装放行</option></select><label class="checkbox-field"><input v-model="step.mandatory_confirmation" type="checkbox">强制确认</label><button v-if="canManage && ['draft','returned'].includes(versionDetail.state)" class="btn btn-xs btn-danger" type="button" @click="removeStep(index)">删除</button></div><div v-if="!stepDrafts.length" class="empty">暂无工艺节点</div></div></div></div>
-    </div>
-  `
-});
-
 const InventoryPage = defineComponent({
   components: { Tabs, DataTable },
   emits: ["toast"],
@@ -1630,6 +1427,20 @@ const SettingsPage = defineComponent({
             <div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : (editingItem ? '保存修改' : '保存') }}</button></div>
           </div>
         </form>
+        <form v-else-if="creating && selected === 'suppliers'" class="equipment-modal-mask" @submit.prevent="submitCreate">
+          <div class="equipment-modal supplier-editor-modal">
+            <div class="equipment-modal-header"><div><div class="modal-title">{{ editingItem ? '编辑供应商' : '新增供应商' }}</div><div class="modal-subtitle">维护供应商主体、付款信息和登录账号</div></div><button class="equipment-close" type="button" @click="creating = false">×</button></div>
+            <div class="supplier-editor-body">
+              <section class="supplier-editor-section"><h3>基本信息</h3><div class="supplier-editor-grid"><label><span><i>*</i>供应商名称</span><input v-model.trim="draft.name" maxlength="100" required placeholder="请输入供应商名称"></label><label><span>供应商编码</span><input :value="draft.brew_supplier_code || '系统自动生成'" disabled></label><label><span><i>*</i>联系人</span><input v-model.trim="draft.brew_contact_name" maxlength="50" required placeholder="请输入联系人姓名"></label><label><span><i>*</i>联系电话</span><input v-model.trim="draft.phone" maxlength="30" required placeholder="请输入手机号或座机号"></label><label><span><i>*</i>电子邮箱</span><input v-model.trim="draft.email" type="email" maxlength="100" required placeholder="请输入电子邮箱"></label><label><span><i>*</i>状态</span><div class="supplier-status-control"><label><input v-model="draft.active" type="radio" :value="true">启用</label><label><input v-model="draft.active" type="radio" :value="false">停用</label></div></label><label class="supplier-editor-wide"><span><i>*</i>地址</span><input v-model.trim="draft.street" maxlength="200" required placeholder="请输入详细地址"></label><label class="supplier-editor-wide"><span>备注</span><textarea v-model.trim="draft.comment" maxlength="500" rows="3" placeholder="请输入备注信息（可选）"></textarea></label></div></section>
+              <section class="supplier-editor-section"><h3>付款信息</h3><div class="supplier-editor-grid"><label><span><i>*</i>统一社会信用代码</span><input v-model.trim="draft.brew_social_credit_code" maxlength="18" required placeholder="请输入统一社会信用代码"></label><label><span><i>*</i>账户名</span><input v-model.trim="draft.brew_bank_account_name" maxlength="100" required placeholder="请输入账户名"></label><label><span><i>*</i>银行名称</span><input v-model.trim="draft.brew_bank_name" maxlength="100" required placeholder="请输入银行名称"></label><label><span><i>*</i>分行名称</span><input v-model.trim="draft.brew_bank_branch" maxlength="100" required placeholder="请输入分行名称"></label><label><span><i>*</i>银行账号</span><input v-model.trim="draft.brew_bank_account" maxlength="50" required placeholder="请输入银行账号"></label></div></section>
+              <section class="supplier-editor-section"><h3>登录账号 <small>可选；填写后供应商可登录商品录入端</small></h3><div class="supplier-editor-grid"><label><span>登录账号</span><input v-model.trim="draft.supplier_account_login" maxlength="100" placeholder="请输入登录账号"></label><label><span>初始密码</span><input v-model="draft.supplier_account_password" type="password" minlength="8" placeholder="至少 8 位"></label></div></section>
+            </div>
+            <div class="equipment-modal-footer"><div v-if="error" class="master-error">{{ error }}</div><button class="btn btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button></div>
+          </div>
+        </form>
+        <form v-else-if="creating && selected === 'users'" class="equipment-modal-mask" @submit.prevent="submitCreate">
+          <div class="equipment-modal material-category-modal"><div class="equipment-modal-header"><div><div class="modal-title">{{ editingItem ? '编辑账号' : '新增账号' }}</div><div class="modal-subtitle">统一管理登录账号、角色和启停状态</div></div><button class="equipment-close" type="button" @click="creating = false">×</button></div><div class="equipment-modal-body material-category-form"><label><span><i>*</i>姓名</span><input v-model.trim="draft.name" required></label><label><span><i>*</i>登录账号</span><input v-model.trim="draft.login" required></label><label v-if="!editingItem"><span><i>*</i>初始密码</span><input v-model="draft.password" type="password" minlength="8" required></label><label><span><i>*</i>角色</span><select v-model="draft.role_code" required><option value="">请选择角色</option><option v-for="role in accountRoles" :key="role.code" :value="role.code">{{ role.label }}</option></select></label><label v-if="draft.role_code === 'supplier'"><span><i>*</i>关联供应商</span><select v-model="draft.supplier_id" required><option value="">请选择供应商</option><option v-for="supplier in supplierItems" :key="supplier.id" :value="supplier.id">{{ supplier.name }}</option></select></label></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="creating = false">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存账号' }}</button></div></div>
+        </form>
         <form v-if="locationCreating" class="equipment-modal-mask" @submit.prevent="submitLocation">
           <div class="equipment-modal material-category-modal">
             <div class="equipment-modal-header"><div><div class="modal-title">{{ locationEditing ? '编辑库位' : '新增库位' }}</div><div class="modal-subtitle">{{ warehouseSelected?.name }} · 设置仓库内的存放位置</div></div><button class="equipment-close" type="button" @click="locationCreating = false">×</button></div>
@@ -1727,6 +1538,17 @@ const SettingsPage = defineComponent({
             </div>
           </template>
         </div>
+        <div v-else-if="selected === 'suppliers'" class="panel-body supplier-master-list">
+          <div v-if="loading" class="empty">正在加载...</div>
+          <div v-else-if="!displayedItems.length" class="empty">暂无供应商</div>
+          <div v-else class="supplier-master-cards">
+            <div v-for="item in displayedItems" :key="item.id" class="supplier-master-card">
+              <span :class="['supplier-master-status', item.active === false ? 'muted' : 'enabled']">{{ item.active === false ? '已停用' : '已启用' }}</span>
+              <div class="supplier-master-main"><strong>{{ item.name }}</strong><span>{{ item.brew_supplier_code || '编码生成中' }} · {{ item.brew_contact_name || '未填写联系人' }} · {{ item.phone || '未填写电话' }}</span><small>{{ item.email || '未填写邮箱' }} · {{ item.street || '未填写地址' }}</small></div>
+              <div class="supplier-master-actions"><button v-if="canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">详情/编辑</button><button v-if="canCreate && item.active !== false" class="btn btn-xs btn-outline" type="button" @click="changeMasterState('suppliers', item, 'archive')">停用</button><button v-if="canCreate && item.active === false" class="btn btn-xs btn-outline" type="button" @click="changeMasterState('suppliers', item, 'restore')">启用</button><button v-if="canCreate && item.active !== false" class="btn btn-xs btn-danger" type="button" @click="changeMasterState('suppliers', item, 'archive', true)">删除</button></div>
+            </div>
+          </div>
+        </div>
         <div v-else-if="selected === 'warehouses'" class="panel-body warehouse-hierarchy">
           <div class="warehouse-level-nav">
             <button type="button" :class="['warehouse-level-step', { active: !warehouseFactory, done: !!warehouseFactory }]" @click="goWarehouseLevel('factory')"><span>1</span><strong>厂区</strong><small>{{ warehouseFactory ? warehouseFactory.name : '选择厂区' }}</small></button>
@@ -1763,7 +1585,11 @@ const SettingsPage = defineComponent({
                 <div class="task-desc">{{ describe(item) }}</div>
               </div>
               <div class="master-actions">
-                <button v-if="selected === 'equipment' && canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button>
+                <button v-if="(selected === 'equipment' || selected === 'users' || selected === 'suppliers') && canCreate" class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">{{ selected === 'suppliers' ? '详情/编辑' : '编辑' }}</button>
+                <button v-if="selected === 'users' && canCreate" class="btn btn-xs btn-outline" type="button" @click="changeUserState(item)">{{ item.active === false ? '启用' : '停用' }}</button>
+                <button v-if="selected === 'suppliers' && canCreate && item.active !== false" class="btn btn-xs btn-outline" type="button" @click="changeMasterState('suppliers', item, 'archive')">停用</button>
+                <button v-if="selected === 'suppliers' && canCreate && item.active === false" class="btn btn-xs btn-outline" type="button" @click="changeMasterState('suppliers', item, 'restore')">启用</button>
+                <button v-if="selected === 'suppliers' && canCreate && item.active !== false" class="btn btn-xs btn-danger" type="button" @click="changeMasterState('suppliers', item, 'archive', true)">删除</button>
                 <button v-if="currentResource.rule && canCreate && item.state !== 'active'" class="btn btn-xs btn-outline" type="button" @click="changeRuleState(item, 'activate')">启用</button>
                 <button v-if="currentResource.rule && canCreate && item.state === 'active'" class="btn btn-xs btn-secondary" type="button" @click="changeRuleState(item, 'deactivate')">停用</button>
                 <span :class="['master-state', item.active === false || item.state === 'inactive' ? 'muted' : 'enabled']">
@@ -1788,7 +1614,8 @@ const SettingsPage = defineComponent({
       { code: "materials", label: "物料", desc: "原料与包装物标准主数据", fields: [...commonFields, { key: "default_code", label: "物料编码" }, { key: "brew_item_type", label: "物料类型", type: "select", values: [["raw_material","原料"],["packaging_material","包装物"]] }, { key: "brew_material_category", label: "原料分类", type: "select", values: [["malt","麦芽"],["hop","酒花"],["yeast","酵母"],["adjunct","辅料"],["packaging","包装物"]] }, { key: "brew_shelf_life_days", label: "保质期(天)", type: "number", required: false }] },
       { code: "material-categories", label: "原料种类", desc: "系统级原料大类和细分类，不绑定厂区", fields: [...commonFields, { key: "code", label: "种类编码" }, { key: "material_group", label: "原料大类", type: "select", values: [["malt","麦芽"],["hop","啤酒花"],["yeast","酵母"],["adjunct","其他可发酵物"],["packaging","包装材料"]] }, { key: "parent_id", label: "所属大类", type: "select", required: false }, { key: "sequence", label: "排序", type: "number", required: false }] },
       { code: "beer-categories", label: "啤酒分类", desc: "系统级啤酒大类和小分类，不绑定厂区", fields: [...commonFields, { key: "code", label: "分类编码" }, { key: "parent_id", label: "所属大类", type: "select", required: false }, { key: "sequence", label: "排序", type: "number", required: false }] },
-      { code: "suppliers", label: "供应商", desc: "供应商联系信息与供货品类", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "brew_supply_category", label: "供货品类", required: false }] },
+      { code: "suppliers", label: "供应商", desc: "供应商主体、联系方式和登录账号", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "email", label: "邮箱", required: false }, { key: "supplier_account_login", label: "登录账号", required: false }, { key: "supplier_account_password", label: "初始密码(至少8位)", type: "password", required: false }] },
+      { code: "users", label: "账号设置", desc: "统一管理登录账号、角色和启停状态", fields: [] },
       { code: "customers", label: "客户", desc: "客户联系信息与等级", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "brew_customer_level", label: "客户等级", type: "select", values: [["normal","普通"],["key","重点"],["vip","VIP"]] }] },
       { code: "number-rules", label: "编号规则", desc: "单据编号和批次编码版本", rule: true, fields: [...commonFields, { key: "code", label: "规则编码" }, { key: "config", label: "规则配置(JSON)", type: "textarea" }] },
       { code: "barcode-rules", label: "条码规则", desc: "批次码、桶码和箱码规则", rule: true, fields: [...commonFields, { key: "code", label: "规则编码" }, { key: "config", label: "规则配置(JSON)", type: "textarea" }] },
@@ -1843,6 +1670,8 @@ const SettingsPage = defineComponent({
     const creating = ref(false);
     const error = ref("");
     const draft = ref({});
+    const accountRoles = ref([]);
+    const supplierItems = ref([]);
     const currentResource = computed(() => resources.find(item => item.code === selected.value));
     function isCategoryResource(code) { return ["material-categories", "beer-categories"].includes(code); }
     function isBeerCategory(code) { return code === "beer-categories"; }
@@ -1881,6 +1710,7 @@ const SettingsPage = defineComponent({
       materials: ["base.master_data.manage", "base.product.manage", "base.material.manage"],
       "material-categories": ["admin.user.manage"],
       suppliers: ["base.master_data.manage", "base.supplier.manage"],
+      users: ["admin.user.manage"],
       customers: ["base.master_data.manage", "base.customer.manage"],
       "beer-categories": ["base.master_data.manage", "base.beer_category.manage"],
       "number-rules": ["base.master_data.manage"],
@@ -1898,9 +1728,15 @@ const SettingsPage = defineComponent({
       error.value = "";
       try {
         const current = currentResource.value;
+        if (current.code === "users") {
+          items.value = await brewApi.listAdminUsers({ page_size: 100 });
+          accountRoles.value = await brewApi.listAdminRoles();
+          supplierItems.value = await brewApi.listMaster("suppliers", { page_size: 200, active: true });
+        } else {
         items.value = current.rule
-          ? await brewApi.listRules(current.code)
-        : await brewApi.listMaster(current.code, { page_size: 100, active: true });
+            ? await brewApi.listRules(current.code)
+          : await brewApi.listMaster(current.code, { page_size: 100, active: current.code === "suppliers" ? "all" : true });
+        }
         if (current.code === "warehouses") {
           warehouseLocations.value = await brewApi.listMaster("locations", { page_size: 500 });
           equipmentItems.value = await brewApi.listMaster("equipment", { page_size: 500, active: true });
@@ -1941,7 +1777,11 @@ const SettingsPage = defineComponent({
     }
 
     function startCreate() {
-      draft.value = currentResource.value.code === "equipment"
+      draft.value = currentResource.value.code === "users"
+          ? { name: "", login: "", password: "", role_code: "", supplier_id: "" }
+        : currentResource.value.code === "suppliers"
+          ? { name: "", brew_supplier_code: "", brew_contact_name: "", phone: "", email: "", active: true, street: "", comment: "", brew_social_credit_code: "", brew_bank_account_name: "", brew_bank_name: "", brew_bank_branch: "", brew_bank_account: "", supplier_account_login: "", supplier_account_password: "" }
+        : currentResource.value.code === "equipment"
           ? { brew_factory_id: equipmentFactory.value?.id || equipmentFactoryFilter.value || "", brew_equipment_type: "mash", name: "", brew_capacity_l: "", brew_tank_volume_l: "", brew_tank_count: 0, tank_specs: [], brew_saccharification_efficiency: 0, brew_screen_water_l: 0, brew_whirlpool_time_min: 0, brew_filtration_speed_l_min: 0 }
         : (currentResource.value.code === "warehouses"
           ? { brew_factory_id: warehouseFactory.value?.id || "", brew_warehouse_type: "", name: "", code: "" }
@@ -1971,6 +1811,14 @@ const SettingsPage = defineComponent({
     }
 
     function startEdit(item) {
+      if (currentResource.value.code === "users") {
+        draft.value = { ...item, role_code: item.role_codes?.[0] || "", password: "" };
+        editingItem.value = item; creating.value = true; error.value = ""; return;
+      }
+      if (currentResource.value.code === "suppliers") {
+        draft.value = { name: item.name || "", brew_supplier_code: item.brew_supplier_code || "", brew_contact_name: item.brew_contact_name || "", phone: item.phone || "", email: item.email || "", active: item.active !== false, street: item.street || "", comment: item.comment || "", brew_social_credit_code: item.brew_social_credit_code || "", brew_bank_account_name: item.brew_bank_account_name || "", brew_bank_name: item.brew_bank_name || "", brew_bank_branch: item.brew_bank_branch || "", brew_bank_account: item.brew_bank_account || "", supplier_account_login: item.account?.login || "", supplier_account_password: "", version: item.version };
+        editingItem.value = item; creating.value = true; error.value = ""; return;
+      }
       if (isCategoryResource(currentResource.value.code)) {
         draft.value = { name: item.name || "", code: item.code || "", ...(isBeerCategory(currentResource.value.code) ? {} : { material_group: item.material_group || "" }), parent_id: item.parent_id?.id || item.parent_id || "", sequence: item.sequence || 10, version: item.version };
         editingItem.value = item;
@@ -2122,6 +1970,15 @@ const SettingsPage = defineComponent({
       try {
         const current = currentResource.value;
         const payload = { ...draft.value };
+        if (current.code === "users") {
+          if (editingItem.value) {
+            const updated = await brewApi.updateAdminUser(editingItem.value.id, { name: payload.name, login: payload.login, version: editingItem.value.version });
+            await brewApi.updateAdminUserRoles(editingItem.value.id, { role_codes: [payload.role_code], version: updated.version });
+          } else {
+            await brewApi.createAdminUser({ name: payload.name, login: payload.login, password: payload.password, role_codes: [payload.role_code], supplier_id: payload.supplier_id || undefined });
+          }
+          creating.value = false; editingItem.value = null; await load(); return;
+        }
         const isCategory = isCategoryResource(current.code);
         const isNewTopCategory = isCategory && !editingItem.value && !payload.parent_id;
         if (isCategory && !editingItem.value) payload.code = generateCategoryCode(isBeerCategory(current.code) ? "beer" : "material");
@@ -2233,8 +2090,14 @@ const SettingsPage = defineComponent({
     function equipmentStatusLabel(status, active = true) { return active === false ? "已删除" : (status === "disabled" ? "已停用" : "已启用"); }
 
     function describe(item) {
-      const parts = [item.code, item.default_code, item.brew_specification, item.address, item.phone, item.rule_kind && `版本 ${item.version}`, item.factory_id?.name, item.brew_factory_id?.name].filter(Boolean);
+      const parts = [item.login, item.role_codes?.map(code => accountRoles.value.find(role => role.code === code)?.label || code).join("、"), item.supplier_name, item.code, item.default_code, item.brew_specification, item.address, item.phone, item.rule_kind && `版本 ${item.version}`, item.factory_id?.name, item.brew_factory_id?.name].filter(Boolean);
       return parts.join(" · ") || `ID ${item.id}`;
+    }
+    async function changeUserState(item) {
+      saving.value = true; error.value = "";
+      try { await brewApi.adminUserAction(item.id, item.active === false ? "enable" : "disable", item.version); await load(); }
+      catch (cause) { error.value = cause.message || "账号状态更新失败。"; }
+      finally { saving.value = false; }
     }
 
     function openMaterialCategory(item) { materialCategoryParent.value = item; }
@@ -2308,6 +2171,8 @@ const SettingsPage = defineComponent({
         if (resource === "warehouses") {
           if (deleting) items.value = items.value.filter(row => Number(row.id) !== Number(item.id));
           else await load();
+        } else if (resource === "suppliers") {
+          await load();
         } else if (deleting) {
           warehouseLocations.value = warehouseLocations.value.filter(row => Number(row.id) !== Number(item.id));
         } else {
@@ -2366,7 +2231,149 @@ const SettingsPage = defineComponent({
     };
 
     onMounted(load);
-    return { resources, selected, items, displayedItems, materialCategoryRows, materialCategoryParent, categoryNotice, materialGroupOptions, warehouseFactoryRows, warehouseFactory, warehouseSelected, locationCreating, locationEditing, locationDetail, locationDraft, locationTypeOptions, warehouseTypeOptions, equipmentFactory, equipmentWarehouse, equipmentLocation, equipmentFactoryRows, equipmentFactoryEquipment, equipmentFactorySystems, equipmentFactoryOther, equipmentFactoryWarehouses, equipmentFactoryGeneral, loading, saving, creating, error, draft, factories, materialCategories, equipmentFactoryFilter, equipmentTypeOptions, newEquipmentType, editingItem, currentResource, canCreate, load, selectResource, startCreate, startCategoryCreate, startEdit, startAddSystemTank, isSystemExpanded, toggleSystemExpanded, addEquipmentType, handleEquipmentTypeChange, syncTankSpecs, adjustTankCount, addTankSpec, addSystemTank, removeSystemTank, autoTankLocation, removeTankSpec, adjustEquipmentNumber, optionsFor, submitCreate, submitLocation, changeRuleState, changeEquipmentState, changeCategoryState, toggleEquipmentStatus, equipmentStatusLabel, describe, stateLabel, openMaterialCategory, clearMaterialCategoryParent, materialGroupLabel, materialCategoryChildCount, startCategoryDrag, dropCategory, openWarehouseFactory, clearWarehouseSelection, openWarehouse, goWarehouseLevel, warehouseLocationCount, warehouseLocationsFor, startLocationCreate, startLocationEdit, editLocation, openLocationDetail, warehouseLocationTypeLabel, warehouseTypeLabel, formatDateTime, tankTypeLabel, tankStatusLabel, changeMasterState, toggleWarehouseStatus, toggleLocationStatus, isCategoryResource, isBeerCategory, openEquipmentFactory, openEquipmentWarehouse, openEquipmentLocation, goEquipmentLevel, equipmentWarehouseLocations, equipmentLocationEquipment, equipmentTypeLabel };
+    return { resources, selected, items, displayedItems, materialCategoryRows, materialCategoryParent, categoryNotice, materialGroupOptions, warehouseFactoryRows, warehouseFactory, warehouseSelected, locationCreating, locationEditing, locationDetail, locationDraft, locationTypeOptions, warehouseTypeOptions, equipmentFactory, equipmentWarehouse, equipmentLocation, equipmentFactoryRows, equipmentFactoryEquipment, equipmentFactorySystems, equipmentFactoryOther, equipmentFactoryWarehouses, equipmentFactoryGeneral, loading, saving, creating, error, draft, factories, materialCategories, equipmentFactoryFilter, equipmentTypeOptions, newEquipmentType, editingItem, currentResource, canCreate, accountRoles, supplierItems, load, selectResource, startCreate, startCategoryCreate, startEdit, startAddSystemTank, isSystemExpanded, toggleSystemExpanded, addEquipmentType, handleEquipmentTypeChange, syncTankSpecs, adjustTankCount, addTankSpec, addSystemTank, removeSystemTank, autoTankLocation, removeTankSpec, adjustEquipmentNumber, optionsFor, submitCreate, submitLocation, changeRuleState, changeEquipmentState, changeCategoryState, toggleEquipmentStatus, equipmentStatusLabel, describe, changeUserState, stateLabel, openMaterialCategory, clearMaterialCategoryParent, materialGroupLabel, materialCategoryChildCount, startCategoryDrag, dropCategory, openWarehouseFactory, clearWarehouseSelection, openWarehouse, goWarehouseLevel, warehouseLocationCount, warehouseLocationsFor, startLocationCreate, startLocationEdit, editLocation, openLocationDetail, warehouseLocationTypeLabel, warehouseTypeLabel, formatDateTime, tankTypeLabel, tankStatusLabel, changeMasterState, toggleWarehouseStatus, toggleLocationStatus, isCategoryResource, isBeerCategory, openEquipmentFactory, openEquipmentWarehouse, openEquipmentLocation, goEquipmentLevel, equipmentWarehouseLocations, equipmentLocationEquipment, equipmentTypeLabel };
+  }
+});
+
+const SupplierCatalogPage = defineComponent({
+  props: { permissions: { type: Array, default: () => [] } },
+  emits: ["toast"],
+  template: `
+    <div class="supplier-catalog-page">
+      <div class="supplier-catalog-toolbar"><div><strong>我的商品</strong><span>维护供应商的麦芽、可发酵物、啤酒花和酵母商品</span></div><button v-if="canManage" class="btn btn-primary" type="button" @click="showCreateModal = true">＋ 录入商品</button></div>
+      <div class="supplier-catalog-grid">
+        <form v-if="showCreateModal" class="equipment-modal-mask" @submit.prevent="submit">
+          <div class="panel supplier-product-form supplier-product-modal">
+          <div class="panel-header"><div><div class="panel-title">{{ editingItem ? '编辑商品' : '录入商品' }}</div><div class="panel-subtitle">{{ draft.group === 'yeast' ? '维护酵母商品信息，发酵度和风味描述将带入配方' : '选择系统已配置的原料分类，填写商品参数' }}</div></div></div>
+          <div class="supplier-form-body">
+            <div class="supplier-form-note">带 <i>*</i> 的项目为必填项。当前登录账号已绑定供应商，商品提交后会自动归属该供应商，酒厂端可在配方和采购环节使用。</div>
+            <div class="supplier-form-section supplier-form-wide">基础必填信息</div>
+            <label><span><i>*</i>大类</span><select v-model="draft.group" required @change="onGroupChange"><option value="">请选择大类</option><option v-for="item in groupOptions" :key="item.material_group" :value="item.material_group">{{ item.name }}</option></select></label>
+            <label><span><i>*</i>小类</span><select v-model="draft.category" required :disabled="!draft.group"><option value="">请选择小类</option><option v-for="item in subcategoryOptions" :key="item.code" :value="item.code">{{ item.name }}</option></select></label>
+            <label><span><i>*</i>商品名称</span><input v-model.trim="draft.name" required maxlength="100" :placeholder="draft.group === 'yeast' ? '请输入酵母商品名称' : '例如：进口澳麦'"></label>
+            <label><span><i>*</i>品牌/生产商</span><input v-model.trim="draft.brand" required maxlength="100" :placeholder="draft.group === 'yeast' ? '请输入酵母品牌或生产商' : '例如：江苏新蕾麦芽'"></label>
+            <label><span><i>*</i>{{ draft.group === 'yeast' ? '包装规格（克）' : '规格' }}</span><input v-model.trim="draft.specification" required maxlength="100" :placeholder="draft.group === 'yeast' ? '例如：500g/包' : '例如：25kg/袋'"></label>
+            <label><span><i>*</i>{{ metricLabel }}</span><input v-model.number="draft.extract_rate" required type="number" min="0" max="100" step="0.1" :placeholder="draft.group === 'yeast' ? '例如：75（填写百分数）' : draft.group === 'hop' ? '例如：6.5' : '例如：81.5'"></label>
+            <label v-if="['malt', 'adjunct'].includes(draft.group)"><span><i>*</i>色度(EBC)</span><input v-model.number="draft.color_ebc" required type="number" min="0" step="0.1" placeholder="例如：4.4"></label>
+            <label v-if="draft.group === 'yeast'" class="supplier-form-wide"><span>风味描述（选填）</span><textarea v-model.trim="draft.flavor_desc" maxlength="500" rows="3" placeholder="请按产品资料填写酵母的香气和风味特征，例如：果香、酯香、口感等。选择该商品时会自动带入配方。"></textarea></label>
+            <label><span><i>*</i>库存计量单位</span><select v-model="draft.weight_uom" required><option value="">请确认原商品计量单位</option><option value="kg">kg</option><option value="g">g</option></select></label>
+            <div v-if="editingItem && !editingItem.is_weight_uom" class="supplier-form-note supplier-form-wide">该旧商品使用非重量单位。请先核对商品数量、价格对应的单位；已有库存业务的商品不能直接更换单位，应建立正确单位的新商品。</div>
+            <label><span><i>*</i>商品价格(元/{{ draft.weight_uom || '单位' }})</span><input v-model.number="draft.price" required type="number" min="0" step="0.01" placeholder="例如：3200"></label>
+            <label><span><i>*</i>商品数量</span><input v-model.number="draft.quantity" required type="number" min="0" step="0.01" placeholder="例如：1000"></label>
+            <div class="supplier-form-section supplier-form-wide">补充信息（选填）</div>
+            <label><span>产品编号</span><input v-model.trim="draft.code" maxlength="64" placeholder="供应商内部编号"></label>
+            <label><span>保质期(天)</span><input v-model.number="draft.shelf_life_days" type="number" min="0" step="1" placeholder="选填"></label>
+            <label><span>批次号</span><input v-model.trim="draft.batch_no" maxlength="64" placeholder="例如：184"></label>
+            <label><span>生产日期</span><input v-model="draft.production_date" type="date"></label>
+            <label><span>出厂日期</span><input v-model="draft.release_date" type="date"></label>
+            <template v-if="draft.group !== 'yeast'">
+              <label><span>水分(%)</span><input v-model.number="draft.moisture_pct" type="number" min="0" step="0.1" placeholder="例如：4.4"></label>
+              <label><span>总蛋白(%)</span><input v-model.number="draft.total_protein_pct" type="number" min="0" step="0.1" placeholder="麦芽检测值"></label>
+              <label><span>浸出物(干基)(%)</span><input v-model.number="draft.extract_dry_pct" type="number" min="0" max="100" step="0.1" placeholder="例如：81.5"></label>
+              <label><span>风味描述/备注</span><input v-model.trim="draft.flavor_desc" maxlength="500" placeholder="原料香气、风味或质量说明"></label>
+            </template>
+            <template v-if="draft.group === 'malt'">
+              <div class="supplier-form-section supplier-form-wide">麦芽分析指标（选填）</div>
+              <label><span>麦芽级别</span><input v-model.trim="draft.malt_class" placeholder="例如：优等品"></label>
+              <label><span>大麦品种</span><input v-model.trim="draft.barley_variety" placeholder="例如：进口澳麦"></label>
+              <label><span>糖化力(WK)</span><input v-model.number="draft.diastatic_power_wk" type="number" min="0" step="1" placeholder="例如：318"></label>
+              <label><span>脆度(%)</span><input v-model.number="draft.friability_pct" type="number" min="0" max="100" step="0.1" placeholder="例如：83"></label>
+              <label><span>库尔巴哈值(%)</span><input v-model.number="draft.kolbach_index_pct" type="number" min="0" max="100" step="0.1" placeholder="例如：42.7"></label>
+              <label><span>β-葡聚糖(mg/L)</span><input v-model.number="draft.beta_dextran_mg_l" type="number" min="0" step="0.1" placeholder="例如：69"></label>
+              <label><span>α-氨基氮(mg/100g)</span><input v-model.number="draft.fan_mg_100g" type="number" min="0" step="0.1" placeholder="例如：162"></label>
+              <label><span>总氮(%)</span><input v-model.number="draft.total_nitrogen_pct" type="number" min="0" step="0.001" placeholder="选填"></label>
+              <label><span>可溶性氮(%)</span><input v-model.number="draft.soluble_nitrogen_pct" type="number" min="0" step="0.001" placeholder="选填"></label>
+              <label><span>过滤时间(min/300ml)</span><input v-model.number="draft.filtration_time_min" type="number" min="0" step="0.1" placeholder="例如：30"></label>
+              <label><span>糖化时间(min)</span><input v-model.number="draft.saccharification_time_min" type="number" min="0" step="0.1" placeholder="例如：9"></label>
+              <label><span>夹杂物(%)</span><input v-model.number="draft.impurity_pct" type="number" min="0" step="0.1" placeholder="例如：0.3"></label>
+              <label><span>粗细粉差(F/C)(%)</span><input v-model.number="draft.fc_difference_pct" type="number" min="0" step="0.1" placeholder="例如：1.1"></label>
+              <label><span>发芽率(%)</span><input v-model.number="draft.germination_rate_pct" type="number" min="0" max="100" step="0.1" placeholder="例如：95"></label>
+              <label><span>pH</span><input v-model.number="draft.ph" type="number" min="0" max="14" step="0.01" placeholder="例如：5.95"></label>
+              <label><span>总酸(ml/100ml)</span><input v-model.number="draft.total_acidity" type="number" min="0" step="0.01" placeholder="例如：1.04"></label>
+              <label><span>煮沸色度(EBC)</span><input v-model.number="draft.boiled_color_ebc" type="number" min="0" step="0.1" placeholder="例如：8.5"></label>
+              <label><span>浊度(EBC)</span><input v-model.number="draft.turbidity_ebc" type="number" min="0" step="0.1" placeholder="例如：1.0"></label>
+              <label><span>OTA(μg/kg)</span><input v-model.number="draft.ota_ug_kg" type="number" min="0" step="0.01" placeholder="未检出可不填"></label>
+              <label><span>脱氧雪腐镰刀菌烯醇(μg/kg)</span><input v-model.number="draft.fusarium_ug_kg" type="number" min="0" step="0.01" placeholder="未检出可不填"></label>
+              <label><span>样品来源</span><input v-model.trim="draft.sample_source" placeholder="例如：澳麦麦芽"></label>
+              <label class="supplier-form-wide"><span>口感品评</span><textarea v-model.trim="draft.sensory_desc" rows="2" placeholder="香气、口感、是否有酸味/泥味等"></textarea></label>
+            </template>
+          </div>
+          <div class="supplier-form-footer"><div v-if="error" class="master-error">{{ error }}</div><button class="btn btn-secondary" type="button" @click="closeEditor">取消</button><button class="btn btn-primary" type="submit" :disabled="saving || !canManage">{{ saving ? '保存中...' : (editingItem ? '保存修改' : '保存商品') }}</button></div>
+          </div>
+        </form>
+        <section class="panel supplier-product-list">
+          <div class="panel-header"><div><div class="panel-title">已录入商品</div><div class="panel-subtitle">当前账号创建的商品</div></div><button class="btn btn-sm btn-secondary" type="button" @click="load">刷新</button></div>
+          <div v-if="loading" class="empty">正在加载...</div>
+          <div v-else-if="listError" class="master-error">{{ listError }}</div>
+          <div v-else-if="!materials.length" class="supplier-empty"><strong>还没有商品</strong><span>从左侧开始录入第一条商品</span></div>
+          <div v-else class="supplier-product-table"><div class="supplier-product-row supplier-product-head"><span>商品名称</span><span>大类/小类</span><span>价格</span><span>数量</span><span>色度</span><span>操作</span></div><div v-for="item in materials" :key="item.id" class="supplier-product-row"><strong>{{ item.name }}</strong><span>{{ groupLabel(item.brew_material_category) }} · {{ categoryLabel(item.brew_material_category) }}</span><span>¥{{ item.brew_supplier_price ?? '—' }}</span><span>{{ item.brew_supplier_quantity ?? '—' }}</span><span>{{ item.brew_color_ebc ?? '—' }} EBC</span><span class="supplier-product-actions"><button class="btn btn-xs btn-outline" type="button" @click="startEdit(item)">编辑</button><button class="btn btn-xs btn-danger" type="button" @click="remove(item)">删除</button></span></div></div>
+        </section>
+      </div>
+    </div>
+  `,
+  setup(props, { emit }) {
+    const materials = ref([]);
+    const categories = ref([]);
+    const loading = ref(false);
+    const saving = ref(false);
+    const listError = ref("");
+    const error = ref("");
+    const showCreateModal = ref(false);
+    const editingItem = ref(null);
+    const draft = reactive({ weight_uom: "kg", group: "", category: "", name: "", brand: "", code: "", specification: "", extract_rate: "", color_ebc: "", price: "", quantity: "", shelf_life_days: "", batch_no: "", production_date: "", release_date: "", moisture_pct: "", total_protein_pct: "", extract_dry_pct: "", flavor_desc: "", malt_class: "", barley_variety: "", diastatic_power_wk: "", friability_pct: "", kolbach_index_pct: "", beta_dextran_mg_l: "", fan_mg_100g: "", total_nitrogen_pct: "", soluble_nitrogen_pct: "", filtration_time_min: "", saccharification_time_min: "", impurity_pct: "", fc_difference_pct: "", germination_rate_pct: "", ph: "", total_acidity: "", boiled_color_ebc: "", turbidity_ebc: "", ota_ug_kg: "", fusarium_ug_kg: "", sample_source: "", sensory_desc: "" });
+    const canManage = computed(() => props.permissions.includes("supplier.catalog.manage"));
+    const groupOptions = computed(() => categories.value.filter(item => !item.parent_id && item.code === item.material_group && ["malt", "adjunct", "hop", "yeast"].includes(item.material_group)));
+    const subcategoryOptions = computed(() => categories.value.filter(item => item.material_group === draft.group && String(item.parent_id?.id || item.parent_id || "") === String(groupOptions.value.find(group => group.material_group === draft.group)?.id || "")));
+    const metricLabel = computed(() => ({ malt: "浸出率(%)", adjunct: "浸出率/发酵度(%)", hop: "Alpha酸(%)", yeast: "发酵度(%)" })[draft.group] || "浸出率/发酵度(%)");
+    function onGroupChange() { draft.category = subcategoryOptions.value[0]?.code || ""; if (!["malt", "adjunct"].includes(draft.group)) draft.color_ebc = 0; }
+    function categoryLabel(code) { return categories.value.find(item => item.code === code)?.name || code || "—"; }
+    function groupLabel(code) { const item = categories.value.find(row => row.code === code); return { malt: "麦芽", adjunct: "其他可发酵物", hop: "啤酒花", yeast: "酵母" }[item?.material_group] || "—"; }
+    function reset() { Object.assign(draft, { weight_uom: "kg", group: "", category: "", name: "", brand: "", code: "", specification: "", extract_rate: "", color_ebc: "", price: "", quantity: "", shelf_life_days: "", batch_no: "", production_date: "", release_date: "", moisture_pct: "", total_protein_pct: "", extract_dry_pct: "", flavor_desc: "", malt_class: "", barley_variety: "", diastatic_power_wk: "", friability_pct: "", kolbach_index_pct: "", beta_dextran_mg_l: "", fan_mg_100g: "", total_nitrogen_pct: "", soluble_nitrogen_pct: "", filtration_time_min: "", saccharification_time_min: "", impurity_pct: "", fc_difference_pct: "", germination_rate_pct: "", ph: "", total_acidity: "", boiled_color_ebc: "", turbidity_ebc: "", ota_ug_kg: "", fusarium_ug_kg: "", sample_source: "", sensory_desc: "" }); }
+    function closeEditor() { showCreateModal.value = false; editingItem.value = null; error.value = ""; reset(); }
+    function startEdit(item) {
+      editingItem.value = item;
+      draft.weight_uom = item.weight_uom || '';
+      Object.assign(draft, { group: categories.value.find(row => row.code === item.brew_material_category)?.material_group || "", category: item.brew_material_category || "", name: item.name || "", brand: item.brew_brand || "", code: item.default_code || "", specification: item.brew_specification || "", extract_rate: item.brew_extract_rate ?? "", color_ebc: item.brew_color_ebc ?? "", price: item.brew_supplier_price ?? "", quantity: item.brew_supplier_quantity ?? "", shelf_life_days: item.brew_shelf_life_days ?? "", batch_no: item.brew_batch_no || "", production_date: item.brew_production_date || "", release_date: item.brew_release_date || "", moisture_pct: item.brew_moisture_pct ?? "", total_protein_pct: item.brew_total_protein_pct ?? "", extract_dry_pct: item.brew_extract_dry_pct ?? "", flavor_desc: item.brew_flavor_desc || "", malt_class: item.brew_malt_class || "", barley_variety: item.brew_barley_variety || "", diastatic_power_wk: item.brew_diastatic_power_wk ?? "", friability_pct: item.brew_friability_pct ?? "", kolbach_index_pct: item.brew_kolbach_index_pct ?? "", beta_dextran_mg_l: item.brew_beta_dextran_mg_l ?? "", fan_mg_100g: item.brew_fan_mg_100g ?? "", total_nitrogen_pct: item.brew_total_nitrogen_pct ?? "", soluble_nitrogen_pct: item.brew_soluble_nitrogen_pct ?? "", filtration_time_min: item.brew_filtration_time_min ?? "", saccharification_time_min: item.brew_saccharification_time_min ?? "", impurity_pct: item.brew_impurity_pct ?? "", fc_difference_pct: item.brew_fc_difference_pct ?? "", germination_rate_pct: item.brew_germination_rate_pct ?? "", ph: item.brew_ph ?? "", total_acidity: item.brew_total_acidity ?? "", boiled_color_ebc: item.brew_boiled_color_ebc ?? "", turbidity_ebc: item.brew_turbidity_ebc ?? "", ota_ug_kg: item.brew_ota_ug_kg ?? "", fusarium_ug_kg: item.brew_fusarium_ug_kg ?? "", sample_source: item.brew_sample_source || "", sensory_desc: item.brew_sensory_desc || "" });
+      showCreateModal.value = true;
+    }
+    async function load() {
+      loading.value = true; listError.value = "";
+      try { [materials.value, categories.value] = await Promise.all([brewApi.listMaster("materials", { page_size: 100, active: true }), brewApi.listMaster("material-categories", { page_size: 200, active: true })]); }
+      catch (cause) { listError.value = cause.message || "商品加载失败。"; }
+      finally { loading.value = false; }
+    }
+    async function submit() {
+      saving.value = true; error.value = "";
+      try {
+        const requiredFields = [
+          ["商品名称", draft.name],
+          ["品牌/生产商", draft.brand],
+          ["规格", draft.specification],
+          ["商品价格", draft.price],
+          ["商品数量", draft.quantity],
+        ];
+        requiredFields.push([metricLabel.value, draft.extract_rate]);
+        if (["malt", "adjunct"].includes(draft.group)) requiredFields.push(["色度", draft.color_ebc]);
+        const missing = requiredFields.find(([, value]) => value === "" || value === null || value === undefined || (typeof value === "string" && !value.trim()));
+        if (missing) throw new Error(`${missing[0]}不能为空。`);
+        if (!draft.category || !subcategoryOptions.value.some(item => item.code === draft.category)) throw new Error("请选择系统已有的小类。");
+        const optional = (value, type = "number") => value === "" || value === null || value === undefined ? undefined : type === "number" ? Number(value) : value;
+        const payload = { name: draft.name, default_code: draft.code, brew_item_type: "raw_material", brew_material_category: draft.category, brew_brand: draft.brand, brew_specification: draft.specification, brew_extract_rate: Number(draft.extract_rate), brew_color_ebc: Number(draft.color_ebc || 0), brew_alpha_acid: draft.group === "hop" ? Number(draft.extract_rate) : 0, brew_supplier_price: Number(draft.price), brew_supplier_quantity: Number(draft.quantity), brew_shelf_life_days: optional(draft.shelf_life_days), brew_batch_no: draft.batch_no, brew_production_date: draft.production_date || undefined, brew_release_date: draft.release_date || undefined, brew_moisture_pct: optional(draft.moisture_pct), brew_total_protein_pct: optional(draft.total_protein_pct), brew_extract_dry_pct: optional(draft.extract_dry_pct), brew_flavor_desc: draft.flavor_desc, brew_malt_class: draft.malt_class, brew_barley_variety: draft.barley_variety, brew_diastatic_power_wk: optional(draft.diastatic_power_wk), brew_friability_pct: optional(draft.friability_pct), brew_kolbach_index_pct: optional(draft.kolbach_index_pct), brew_beta_dextran_mg_l: optional(draft.beta_dextran_mg_l), brew_fan_mg_100g: optional(draft.fan_mg_100g), brew_total_nitrogen_pct: optional(draft.total_nitrogen_pct), brew_soluble_nitrogen_pct: optional(draft.soluble_nitrogen_pct), brew_filtration_time_min: optional(draft.filtration_time_min), brew_saccharification_time_min: optional(draft.saccharification_time_min), brew_impurity_pct: optional(draft.impurity_pct), brew_fc_difference_pct: optional(draft.fc_difference_pct), brew_germination_rate_pct: optional(draft.germination_rate_pct), brew_ph: optional(draft.ph), brew_total_acidity: optional(draft.total_acidity), brew_boiled_color_ebc: optional(draft.boiled_color_ebc), brew_turbidity_ebc: optional(draft.turbidity_ebc), brew_ota_ug_kg: optional(draft.ota_ug_kg), brew_fusarium_ug_kg: optional(draft.fusarium_ug_kg), brew_sample_source: draft.sample_source, brew_sensory_desc: draft.sensory_desc };
+        const wasEditing = Boolean(editingItem.value);
+        payload.weight_uom = draft.weight_uom;
+        if (wasEditing) await brewApi.updateMaster("materials", editingItem.value.id, { ...payload, version: editingItem.value.version });
+        else await brewApi.createMaster("materials", payload);
+        closeEditor(); await load(); emit("toast", wasEditing ? "商品已更新" : "商品已保存");
+      } catch (cause) { error.value = cause.message || "商品保存失败。"; }
+      finally { saving.value = false; }
+    }
+    async function remove(item) {
+      if (!window.confirm(`确定要删除“${item.name}”吗？删除后将不再显示。`)) return;
+      try { await brewApi.masterAction("materials", item.id, "archive", item.version); await load(); emit("toast", "商品已删除"); }
+      catch (cause) { error.value = cause.message || "商品删除失败。"; }
+    }
+    onMounted(load);
+    return { materials, loading, saving, listError, error, draft, showCreateModal, editingItem, canManage, metricLabel, groupOptions, subcategoryOptions, onGroupChange, categoryLabel, groupLabel, load, submit, startEdit, closeEditor, remove };
   }
 });
 

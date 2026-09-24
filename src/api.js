@@ -374,6 +374,22 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  listAdminUsers(params = {}) {
+    return request(`/api/v1/admin/users?${new URLSearchParams(params).toString()}`);
+  },
+  listAdminRoles() { return request("/api/v1/admin/roles"); },
+  createAdminUser(data) {
+    return request("/api/v1/admin/users", { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  updateAdminUser(id, data) {
+    return request(`/api/v1/admin/users/${id}`, { method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  updateAdminUserRoles(id, data) {
+    return request(`/api/v1/admin/users/${id}/roles`, { method: "PUT", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  adminUserAction(id, action, version) {
+    return request(`/api/v1/admin/users/${id}/${action}`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify({ version }) });
+  },
   masterAction(resource, id, action, version) {
     return request(`/api/v1/${resource}/${id}/${action}`, {
       method: "POST",
@@ -418,6 +434,11 @@ export const brewApi = {
   },
   getRecipeVersion(versionId) {
     return request(`/api/v1/recipe-versions/${versionId}`);
+  },
+  copyRecipeVersion(versionId) {
+    return request(`/api/v1/recipe-versions/${versionId}/copy`, {
+      method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: "{}"
+    });
   },
   createRecipeVersion(recipeId, data) {
     return request(`/api/v1/recipes/${recipeId}/versions`, {
