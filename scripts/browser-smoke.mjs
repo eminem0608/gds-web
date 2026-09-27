@@ -130,5 +130,42 @@ for (const label of [
   }))()`));
 }
 
-console.log(JSON.stringify({ ...result, pageChecks, runtimeErrors, requestErrors }, null, 2));
+await evaluate(`(() => {
+  const button = [...document.querySelectorAll('.nav-item')]
+    .find((item) => item.textContent.includes('系统设置'));
+  if (!button) throw new Error('System settings navigation item not found');
+  button.click();
+})()`);
+await delay(700);
+await evaluate(`(() => {
+  const button = [...document.querySelectorAll('.master-nav-item')]
+    .find((item) => item.textContent.includes('账号与权限'));
+  if (!button) throw new Error('Account settings item not found');
+  button.click();
+})()`);
+await delay(1200);
+
+const accountChecks = {};
+for (const tab of [
+  { label: '用户管理', selector: '.account-card', key: 'users' },
+  { label: '角色管理', selector: '.role-manage-card', key: 'roles' },
+  { label: '组织机构', selector: '.organization-row', key: 'organizations' },
+]) {
+  await evaluate(`(() => {
+    const button = [...document.querySelectorAll('.account-tabs button')]
+      .find((item) => item.textContent.includes(${JSON.stringify(tab.label)}));
+    if (!button) throw new Error('Account tab not found: ' + ${JSON.stringify(tab.label)});
+    button.click();
+  })()`);
+  await delay(500);
+  accountChecks[tab.key] = await evaluate(
+    `document.querySelectorAll(${JSON.stringify(tab.selector)}).length`,
+  );
+}
+
+if (accountChecks.users < 1 || accountChecks.roles < 1 || accountChecks.organizations < 1) {
+  throw new Error('Account settings data missing: ' + JSON.stringify(accountChecks));
+}
+
+console.log(JSON.stringify({ ...result, pageChecks, accountChecks, runtimeErrors, requestErrors }, null, 2));
 await command("Browser.close");

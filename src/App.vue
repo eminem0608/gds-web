@@ -664,7 +664,8 @@ const ProductionPage = defineComponent({
   },
   computed: {
     tabs() {
-      const result = [{ id: "requests", label: "产品需求" }];
+      const result = [];
+      if (this.canReadDemands) result.push({ id: "requests", label: "产品需求" });
       if (this.canReadPlans) result.push({ id: "plans", label: "生产计划" });
       if (this.canExecuteProduction) {
         result.push({ id: "mash", label: "糖化执行" });
@@ -681,6 +682,9 @@ const ProductionPage = defineComponent({
     },
     canCreateDemand() {
       return this.permissions.includes("demand.product.manage_own");
+    },
+    canReadDemands() {
+      return this.permissions.some(item => ["demand.product.manage_own", "demand.product.confirm", "dashboard.overview.read"].includes(item));
     },
     canReadPlans() {
       return this.permissions.some(item => ["plan.production.read", "plan.production.manage", "plan.production.approve"].includes(item));
@@ -793,7 +797,10 @@ const ProductionPage = defineComponent({
     }
   },
   mounted() {
-    this.loadDemands();
+    this.tab = !this.canReadDemands && !this.canReadPlans && this.canExecuteProduction
+      ? "fermentation"
+      : (this.tabs[0]?.id || "mash");
+    if (this.canReadDemands) this.loadDemands();
     this.loadExecution();
   },
   methods: {
@@ -906,9 +913,9 @@ const ProductionPage = defineComponent({
   },
   template: `
     <Tabs v-model="tab" :tabs="tabs" />
+    <div v-if="demandError" class="master-error">{{ demandError }}</div>
     <div v-if="tab === 'requests'" class="panel">
       <div class="panel-header"><div class="panel-title">产品需求</div><div class="master-actions"><button class="btn btn-sm btn-secondary" @click="loadDemands">刷新</button><button v-if="canCreateDemand" class="btn btn-sm btn-primary" @click="openRequest">新建需求</button></div></div>
-      <div v-if="demandError" class="master-error">{{ demandError }}</div>
       <form v-if="showDemandForm" class="master-form" @submit.prevent="submitDemand">
         <label><span>客户</span><select v-model="demandDraft.customer_id" required><option value="">请选择</option><option v-for="item in customers" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
         <label><span>产品</span><select v-model="demandDraft.product_tmpl_id" required><option value="">请选择</option><option v-for="item in products" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
@@ -1264,7 +1271,81 @@ const ReportsPage = defineComponent({
   }
 });
 
+const AccountSettings = defineComponent({
+  props: { permissions: { type: Array, default: () => [] } },
+  template: `
+    <div class="account-settings">
+      <div class="account-tabs">
+        <button v-for="tab in tabs" :key="tab.code" type="button" :class="{ active: activeTab === tab.code }" @click="activeTab = tab.code">{{ tab.label }}<small>{{ tabCount(tab.code) }}</small></button>
+      </div>
+      <div v-if="error" class="master-error">{{ error }}</div>
+      <div v-if="notice" class="master-notice">{{ notice }}</div>
+
+      <template v-if="activeTab === 'users'">
+        <div class="account-toolbar"><div><strong>用户管理</strong><span>维护登录账号、组织归属、岗位、角色和厂区数据范围</span></div><div class="master-actions"><input v-model.trim="keyword" class="account-search" placeholder="搜索姓名或账号"><button class="btn btn-sm btn-secondary" type="button" @click="load">刷新</button><button class="btn btn-sm btn-primary" type="button" @click="openUser()">新增用户</button></div></div>
+        <div v-if="loading" class="empty">正在加载...</div>
+        <div v-else class="account-card-list">
+          <article v-for="user in filteredUsers" :key="user.id" class="account-card">
+            <div class="account-avatar">{{ user.name.slice(0,1) }}</div>
+            <div class="account-card-main"><div class="account-card-title"><strong>{{ user.name }}</strong><span :class="['master-state', user.active ? 'enabled' : 'muted']">{{ user.active ? '启用' : '停用' }}</span><em v-if="user.is_organization_manager">负责人</em></div><div class="account-card-meta">{{ user.login }} · {{ user.organization_name || '未分配组织' }}<template v-if="user.job_title"> · {{ user.job_title }}</template></div><div class="account-tags"><span v-for="code in user.role_codes" :key="'d'+code">{{ roleName(code) }}</span><span v-for="code in user.inherited_role_codes" :key="'i'+code" class="inherited">{{ roleName(code) }}（组织）</span><i v-if="!user.effective_role_codes?.length">暂无角色</i></div></div>
+            <div class="master-actions"><button class="btn btn-xs btn-outline" type="button" @click="openUser(user)">编辑</button><button class="btn btn-xs btn-outline" type="button" @click="resetPassword(user)">重置密码</button><button class="btn btn-xs btn-outline" type="button" @click="toggleUser(user)">{{ user.active ? '停用' : '启用' }}</button></div>
+          </article>
+          <div v-if="!filteredUsers.length" class="empty">没有符合条件的用户</div>
+        </div>
+      </template>
+
+      <template v-else-if="activeTab === 'roles'">
+        <div class="account-toolbar"><div><strong>角色管理</strong><span>角色使用系统权限模板，可配置名称、菜单、组织继承和直接用户</span></div><button class="btn btn-sm btn-secondary" type="button" @click="load">刷新</button></div>
+        <div v-if="loading" class="empty">正在加载...</div>
+        <div v-else class="role-card-grid"><article v-for="role in roleItems" :key="role.code" class="role-manage-card"><div class="role-card-head"><div class="role-card-icon">{{ role.label.slice(0,1) }}</div><div><strong>{{ role.label }}</strong><small>{{ role.code }}</small></div><span :class="['master-state', role.active ? 'enabled' : 'muted']">{{ role.active ? '启用' : '停用' }}</span></div><p>{{ role.description || '系统内置权限模板' }}</p><div class="role-card-stats"><span><b>{{ role.menu_codes.length }}</b> 个菜单</span><span><b>{{ role.organization_ids.length }}</b> 个组织</span><span><b>{{ role.effective_user_count }}</b> 位用户</span></div><div class="account-tags"><span v-for="name in role.organization_names" :key="name" class="inherited">{{ name }}</span><i v-if="!role.organization_names.length">未配置组织继承</i></div><button class="btn btn-sm btn-outline role-configure" type="button" @click="openRole(role)">配置角色</button></article></div>
+      </template>
+
+      <template v-else>
+        <div class="account-toolbar"><div><strong>组织机构管理</strong><span>建立总部、厂区、部门、车间和班组层级；用户只能归属一个组织节点</span></div><div class="master-actions"><button class="btn btn-sm btn-secondary" type="button" @click="load">刷新</button><button class="btn btn-sm btn-primary" type="button" @click="openOrganization()">新增组织</button></div></div>
+        <div v-if="loading" class="empty">正在加载...</div>
+        <div v-else class="organization-list"><article v-for="item in organizationRows" :key="item.id" class="organization-row" :style="{ '--org-depth': item.depth }"><div class="organization-tree-line"><span>{{ organizationTypeIcon(item.type) }}</span></div><div class="organization-main"><div><strong>{{ item.name }}</strong><code>{{ item.code }}</code><span :class="['master-state', item.active ? 'enabled' : 'muted']">{{ item.active ? '启用' : '停用' }}</span></div><small>{{ organizationTypeLabel(item.type) }} · {{ item.path }}</small></div><div class="organization-summary"><span>{{ item.user_count }} 位用户</span><span>{{ item.role_names.join('、') || '无组织角色' }}</span></div><button class="btn btn-xs btn-outline" type="button" @click="openOrganization(item)">编辑</button></article></div>
+      </template>
+
+      <form v-if="editor === 'user'" class="equipment-modal-mask" @submit.prevent="saveUser"><div class="equipment-modal account-editor-modal"><div class="equipment-modal-header"><div><div class="modal-title">{{ editing ? '编辑用户' : '新增用户' }}</div><div class="modal-subtitle">基础信息、组织归属、角色和厂区范围集中配置</div></div><button class="equipment-close" type="button" @click="closeEditor">×</button></div><div class="account-editor-body"><section><h3>账号信息</h3><div class="account-form-grid"><label><span><i>*</i>姓名</span><input v-model.trim="draft.name" required></label><label><span><i>*</i>登录账号</span><input v-model.trim="draft.login" required></label><label v-if="!editing"><span><i>*</i>初始密码</span><input v-model="draft.password" type="password" minlength="8" required></label><label><span>岗位</span><input v-model.trim="draft.job_title" placeholder="如：糖化操作工"></label></div></section><section><h3>组织归属</h3><div class="account-form-grid"><label><span>所属组织</span><select v-model="draft.organization_id"><option value="">暂不分配</option><option v-for="item in activeOrganizations" :key="item.id" :value="item.id">{{ item.path }}</option></select></label><label class="account-check-line"><input v-model="draft.is_organization_manager" type="checkbox"><span>设为该组织负责人</span></label></div></section><section><h3>直接角色 <small>组织继承的角色会自动叠加</small></h3><div class="permission-check-grid"><label v-for="role in activeRoles" :key="role.code"><input v-model="draft.role_codes" type="checkbox" :value="role.code"><span><strong>{{ role.label }}</strong><small>{{ role.description || role.code }}</small></span></label></div></section><section><h3>厂区数据范围</h3><div class="permission-check-grid compact"><label v-for="factory in factories" :key="factory.id"><input v-model="draft.factory_ids" type="checkbox" :value="String(factory.id)"><span><strong>{{ factory.name }}</strong><small>{{ factory.code }}</small></span></label></div><label class="account-default-factory"><span>默认厂区</span><select v-model="draft.default_factory_id"><option value="">不设置</option><option v-for="factory in selectedFactories" :key="factory.id" :value="String(factory.id)">{{ factory.name }}</option></select></label></section><section v-if="draft.role_codes.includes('supplier')"><h3>供应商账号</h3><label><span><i>*</i>关联供应商</span><select v-model="draft.supplier_id" required><option value="">请选择供应商</option><option v-for="supplier in suppliers" :key="supplier.id" :value="supplier.id">{{ supplier.name }}</option></select></label></section></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="closeEditor">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存用户' }}</button></div></div></form>
+
+      <form v-if="editor === 'role'" class="equipment-modal-mask" @submit.prevent="saveRole"><div class="equipment-modal account-editor-modal"><div class="equipment-modal-header"><div><div class="modal-title">配置角色 · {{ draft.name }}</div><div class="modal-subtitle">{{ draft.code }} · 权限模板固定，菜单和适用范围可配置</div></div><button class="equipment-close" type="button" @click="closeEditor">×</button></div><div class="account-editor-body"><section><h3>基本信息</h3><div class="account-form-grid"><label><span><i>*</i>角色名称</span><input v-model.trim="draft.name" required></label><label class="account-check-line"><input v-model="draft.active" type="checkbox"><span>启用该角色</span></label><label class="account-wide"><span>角色说明</span><textarea v-model.trim="draft.description" rows="2"></textarea></label></div></section><section><h3>菜单权限</h3><div class="permission-check-grid"><label v-for="menu in menuOptions" :key="menu.code"><input v-model="draft.menu_codes" type="checkbox" :value="menu.code"><span><strong>{{ menu.label }}</strong><small>{{ menu.code }}</small></span></label></div></section><section><h3>适用组织 <small>选择后，该组织及其下级组织用户自动继承此角色</small></h3><div class="permission-check-grid"><label v-for="item in activeOrganizations" :key="item.id"><input v-model="draft.organization_ids" type="checkbox" :value="String(item.id)"><span><strong>{{ item.name }}</strong><small>{{ item.path }}</small></span></label></div></section><section><h3>直接用户 <small>适合跨组织兼职或特殊授权</small></h3><div class="permission-check-grid"><label v-for="user in users" :key="user.id"><input v-model="draft.direct_user_ids" type="checkbox" :value="String(user.id)"><span><strong>{{ user.name }}</strong><small>{{ user.organization_name || user.login }}</small></span></label></div></section></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="closeEditor">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存角色配置' }}</button></div></div></form>
+
+      <form v-if="editor === 'organization'" class="equipment-modal-mask" @submit.prevent="saveOrganization"><div class="equipment-modal material-category-modal"><div class="equipment-modal-header"><div><div class="modal-title">{{ editing ? '编辑组织' : '新增组织' }}</div><div class="modal-subtitle">维护组织层级和基础信息</div></div><button class="equipment-close" type="button" @click="closeEditor">×</button></div><div class="equipment-modal-body material-category-form"><label><span><i>*</i>组织名称</span><input v-model.trim="draft.name" required></label><label><span><i>*</i>组织编码</span><input v-model.trim="draft.code" required></label><label><span>上级组织</span><select v-model="draft.parent_id"><option value="">无上级组织</option><option v-for="item in organizationParentOptions" :key="item.id" :value="item.id">{{ item.path }}</option></select></label><label><span><i>*</i>组织类型</span><select v-model="draft.type" required><option v-for="type in organizationTypes" :key="type.value" :value="type.value">{{ type.label }}</option></select></label><label><span>地址</span><input v-model.trim="draft.address"></label><label v-if="editing" class="account-check-line"><input v-model="draft.active" type="checkbox"><span>启用该组织</span></label></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="closeEditor">取消</button><button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存组织' }}</button></div></div></form>
+    </div>
+  `,
+  setup() {
+    const tabs = [{ code: "users", label: "用户管理" }, { code: "roles", label: "角色管理" }, { code: "organizations", label: "组织机构" }];
+    const menuOptions = Object.entries(pageMeta).map(([code, item]) => ({ code, label: item.title }));
+    const organizationTypes = [{ value: "company", label: "总部" }, { value: "factory", label: "厂区" }, { value: "department", label: "部门" }, { value: "workshop", label: "车间" }, { value: "team", label: "班组" }];
+    const activeTab = ref("users"), loading = ref(false), saving = ref(false), error = ref(""), notice = ref(""), keyword = ref(""), editor = ref(""), editing = ref(null), draft = ref({});
+    const users = ref([]), roleItems = ref([]), organizations = ref([]), factories = ref([]), suppliers = ref([]);
+    const activeRoles = computed(() => roleItems.value.filter(item => item.active || draft.value.role_codes?.includes(item.code)));
+    const activeOrganizations = computed(() => organizations.value.filter(item => item.active || item.id === draft.value.organization_id || draft.value.organization_ids?.includes(String(item.id))));
+    const filteredUsers = computed(() => { const value = keyword.value.toLowerCase(); return users.value.filter(item => !value || [item.name,item.login,item.organization_name,item.job_title].some(field => String(field || '').toLowerCase().includes(value))); });
+    const selectedFactories = computed(() => factories.value.filter(item => draft.value.factory_ids?.includes(String(item.id))));
+    const organizationParentOptions = computed(() => { if(!editing.value) return organizations.value.filter(item=>item.active); const blocked=new Set([editing.value.id]); let changed=true; while(changed){ changed=false; organizations.value.forEach(item=>{ if(!blocked.has(item.id)&&blocked.has(item.parent_id)){ blocked.add(item.id); changed=true; } }); } return organizations.value.filter(item=>item.active&&!blocked.has(item.id)); });
+    const organizationRows = computed(() => { const byParent = new Map(); organizations.value.forEach(item => { const key = String(item.parent_id || 'root'); if (!byParent.has(key)) byParent.set(key, []); byParent.get(key).push(item); }); const rows=[]; const visit=(parent,depth)=>{ (byParent.get(String(parent || 'root')) || []).sort((a,b)=>a.sequence-b.sequence||a.name.localeCompare(b.name,'zh-CN')).forEach(item=>{ rows.push({...item,depth}); visit(item.id,depth+1); }); }; visit(null,0); return rows; });
+    async function load() { loading.value=true; error.value=""; try { [users.value,roleItems.value,organizations.value,factories.value,suppliers.value] = await Promise.all([brewApi.listAdminUsers({page_size:100}),brewApi.listAdminRoles(),brewApi.listAdminOrganizations(),brewApi.listMaster("factories",{page_size:100,active:true}),brewApi.listMaster("suppliers",{page_size:200,active:true})]); } catch(cause){ error.value=cause.message||"账号配置加载失败。"; } finally { loading.value=false; } }
+    function tabCount(code){ return code==='users'?users.value.length:code==='roles'?roleItems.value.length:organizations.value.length; }
+    function roleName(code){ return roleItems.value.find(item=>item.code===code)?.label || code; }
+    function closeEditor(){ editor.value=""; editing.value=null; draft.value={}; }
+    function openUser(user=null){ editing.value=user; draft.value=user?{...user,role_codes:[...(user.role_codes||[])],factory_ids:[...(user.factory_ids||[])],default_factory_id:user.default_factory_id||"",organization_id:user.organization_id||"",password:""}:{name:"",login:"",password:"",job_title:"",organization_id:"",is_organization_manager:false,role_codes:[],factory_ids:[],default_factory_id:"",supplier_id:""}; editor.value='user'; error.value=""; }
+    function openRole(role){ editing.value=role; draft.value={...role,name:role.label,menu_codes:[...(role.menu_codes||[])],organization_ids:[...(role.organization_ids||[])],direct_user_ids:[...(role.direct_user_ids||[])]}; editor.value='role'; error.value=""; }
+    function openOrganization(item=null){ editing.value=item; draft.value=item?{...item,parent_id:item.parent_id||""}:{name:"",code:"",parent_id:"",type:"department",address:"",active:true,sequence:10}; editor.value='organization'; error.value=""; }
+    async function saveUser(){ saving.value=true; error.value=""; try { const payload={name:draft.value.name,login:draft.value.login,organization_id:draft.value.organization_id||null,job_title:draft.value.job_title||"",is_organization_manager:!!draft.value.is_organization_manager,supplier_id:draft.value.supplier_id||null}; let user; if(editing.value){ user=await brewApi.updateAdminUser(editing.value.id,{...payload,version:editing.value.version}); user=await brewApi.updateAdminUserRoles(editing.value.id,{role_codes:draft.value.role_codes,version:user.version}); await brewApi.updateAdminUserDataScopes(editing.value.id,{factory_ids:draft.value.factory_ids,default_factory_id:draft.value.default_factory_id||null,version:user.version}); } else { user=await brewApi.createAdminUser({...payload,password:draft.value.password,role_codes:draft.value.role_codes}); if(draft.value.factory_ids.length) await brewApi.updateAdminUserDataScopes(user.id,{factory_ids:draft.value.factory_ids,default_factory_id:draft.value.default_factory_id||null,version:user.version}); } notice.value="用户配置已保存。"; closeEditor(); await load(); } catch(cause){ error.value=cause.message||"用户保存失败。"; } finally { saving.value=false; } }
+    async function saveRole(){ saving.value=true; error.value=""; try { await brewApi.updateAdminRole(draft.value.code,{name:draft.value.name,description:draft.value.description,active:draft.value.active,menu_codes:draft.value.menu_codes,organization_ids:draft.value.organization_ids,direct_user_ids:draft.value.direct_user_ids,version:editing.value.version}); notice.value="角色配置已保存，组织用户权限已同步。"; closeEditor(); await load(); } catch(cause){ error.value=cause.message||"角色保存失败。"; } finally { saving.value=false; } }
+    async function saveOrganization(){ saving.value=true; error.value=""; try { const payload={name:draft.value.name,code:draft.value.code,parent_id:draft.value.parent_id||null,type:draft.value.type,address:draft.value.address||"",active:draft.value.active,sequence:draft.value.sequence||10}; if(editing.value) await brewApi.updateAdminOrganization(editing.value.id,{...payload,version:editing.value.version}); else await brewApi.createAdminOrganization(payload); notice.value="组织机构已保存。"; closeEditor(); await load(); } catch(cause){ error.value=cause.message||"组织保存失败。"; } finally { saving.value=false; } }
+    async function toggleUser(user){ if(user.active && !window.confirm(`确定停用“${user.name}”吗？停用后其登录会话将失效。`)) return; try { await brewApi.adminUserAction(user.id,user.active?'disable':'enable',user.version); await load(); } catch(cause){ error.value=cause.message||"用户状态更新失败。"; } }
+    async function resetPassword(user){ const password=window.prompt(`为“${user.name}”设置新密码（至少 8 位）`); if(!password) return; if(password.length<8){ error.value="新密码至少 8 位。"; return; } try { await brewApi.resetAdminUserPassword(user.id,{password}); notice.value="密码已重置，原登录会话已失效。"; } catch(cause){ error.value=cause.message||"密码重置失败。"; } }
+    function organizationTypeLabel(type){ return organizationTypes.find(item=>item.value===type)?.label||type; }
+    function organizationTypeIcon(type){ return ({company:'总',factory:'厂',department:'部',workshop:'间',team:'组'})[type]||'组'; }
+    onMounted(load);
+    return { tabs,menuOptions,organizationTypes,activeTab,loading,saving,error,notice,keyword,editor,editing,draft,users,roleItems,organizations,factories,suppliers,activeRoles,activeOrganizations,filteredUsers,selectedFactories,organizationParentOptions,organizationRows,load,tabCount,roleName,closeEditor,openUser,openRole,openOrganization,saveUser,saveRole,saveOrganization,toggleUser,resetPassword,organizationTypeLabel,organizationTypeIcon };
+  }
+});
+
 const SettingsPage = defineComponent({
+  components: { AccountSettings },
   props: { permissions: { type: Array, default: () => [] } },
   template: `
     <div class="master-workspace">
@@ -1278,7 +1359,7 @@ const SettingsPage = defineComponent({
         >{{ item.label }}</button>
       </aside>
       <div class="panel master-panel">
-        <div class="panel-header">
+        <div v-if="selected !== 'accounts'" class="panel-header">
           <div>
             <div class="panel-title">{{ currentResource.label }}</div>
             <div class="panel-subtitle">{{ currentResource.desc }}</div>
@@ -1288,6 +1369,8 @@ const SettingsPage = defineComponent({
             <button v-if="canCreate && !(selected === 'equipment' && equipmentFactory)" class="btn btn-sm btn-primary" type="button" @click.prevent.stop="isCategoryResource(selected) ? startCategoryCreate() : startCreate()">{{ isCategoryResource(selected) && materialCategoryParent ? '新增小类' : '新增' }}</button>
           </div>
         </div>
+        <AccountSettings v-if="selected === 'accounts'" :permissions="permissions" />
+        <template v-else>
         <div v-if="error" class="master-error">{{ error }}</div>
         <div v-if="categoryNotice" class="master-notice">{{ categoryNotice }}</div>
         <form v-if="creating && selected === 'equipment'" class="equipment-modal-mask" @submit.prevent="submitCreate">
@@ -1599,6 +1682,7 @@ const SettingsPage = defineComponent({
             </div>
           </template>
         </div>
+        </template>
       </div>
     </div>
   `,
@@ -1615,7 +1699,7 @@ const SettingsPage = defineComponent({
       { code: "material-categories", label: "原料种类", desc: "系统级原料大类和细分类，不绑定厂区", fields: [...commonFields, { key: "code", label: "种类编码" }, { key: "material_group", label: "原料大类", type: "select", values: [["malt","麦芽"],["hop","啤酒花"],["yeast","酵母"],["adjunct","其他可发酵物"],["packaging","包装材料"]] }, { key: "parent_id", label: "所属大类", type: "select", required: false }, { key: "sequence", label: "排序", type: "number", required: false }] },
       { code: "beer-categories", label: "啤酒分类", desc: "系统级啤酒大类和小分类，不绑定厂区", fields: [...commonFields, { key: "code", label: "分类编码" }, { key: "parent_id", label: "所属大类", type: "select", required: false }, { key: "sequence", label: "排序", type: "number", required: false }] },
       { code: "suppliers", label: "供应商", desc: "供应商主体、联系方式和登录账号", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "email", label: "邮箱", required: false }, { key: "supplier_account_login", label: "登录账号", required: false }, { key: "supplier_account_password", label: "初始密码(至少8位)", type: "password", required: false }] },
-      { code: "users", label: "账号设置", desc: "统一管理登录账号、角色和启停状态", fields: [] },
+      { code: "accounts", label: "账号与权限", desc: "统一管理用户、角色、组织机构和菜单权限", fields: [] },
       { code: "customers", label: "客户", desc: "客户联系信息与等级", fields: [...commonFields, { key: "phone", label: "电话", required: false }, { key: "brew_customer_level", label: "客户等级", type: "select", values: [["normal","普通"],["key","重点"],["vip","VIP"]] }] },
       { code: "number-rules", label: "编号规则", desc: "单据编号和批次编码版本", rule: true, fields: [...commonFields, { key: "code", label: "规则编码" }, { key: "config", label: "规则配置(JSON)", type: "textarea" }] },
       { code: "barcode-rules", label: "条码规则", desc: "批次码、桶码和箱码规则", rule: true, fields: [...commonFields, { key: "code", label: "规则编码" }, { key: "config", label: "规则配置(JSON)", type: "textarea" }] },
@@ -1710,7 +1794,7 @@ const SettingsPage = defineComponent({
       materials: ["base.master_data.manage", "base.product.manage", "base.material.manage"],
       "material-categories": ["admin.user.manage"],
       suppliers: ["base.master_data.manage", "base.supplier.manage"],
-      users: ["admin.user.manage"],
+      accounts: ["admin.user.manage"],
       customers: ["base.master_data.manage", "base.customer.manage"],
       "beer-categories": ["base.master_data.manage", "base.beer_category.manage"],
       "number-rules": ["base.master_data.manage"],
@@ -1728,6 +1812,7 @@ const SettingsPage = defineComponent({
       error.value = "";
       try {
         const current = currentResource.value;
+        if (current.code === "accounts") return;
         if (current.code === "users") {
           items.value = await brewApi.listAdminUsers({ page_size: 100 });
           accountRoles.value = await brewApi.listAdminRoles();

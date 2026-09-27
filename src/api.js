@@ -378,6 +378,16 @@ export const brewApi = {
     return request(`/api/v1/admin/users?${new URLSearchParams(params).toString()}`);
   },
   listAdminRoles() { return request("/api/v1/admin/roles"); },
+  updateAdminRole(code, data) {
+    return request(`/api/v1/admin/roles/${code}`, { method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  listAdminOrganizations() { return request("/api/v1/admin/organizations"); },
+  createAdminOrganization(data) {
+    return request("/api/v1/admin/organizations", { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  updateAdminOrganization(id, data) {
+    return request(`/api/v1/admin/organizations/${id}`, { method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
   createAdminUser(data) {
     return request("/api/v1/admin/users", { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
   },
@@ -386,6 +396,12 @@ export const brewApi = {
   },
   updateAdminUserRoles(id, data) {
     return request(`/api/v1/admin/users/${id}/roles`, { method: "PUT", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  updateAdminUserDataScopes(id, data) {
+    return request(`/api/v1/admin/users/${id}/data-scopes`, { method: "PUT", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
+  resetAdminUserPassword(id, data) {
+    return request(`/api/v1/admin/users/${id}/reset-password`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
   },
   adminUserAction(id, action, version) {
     return request(`/api/v1/admin/users/${id}/${action}`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify({ version }) });
