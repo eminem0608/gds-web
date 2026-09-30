@@ -6,7 +6,7 @@ export function emptyDesign() {
   return { schema_version: 2, brew_volume_l: 1000, brew_equipment_id: '', ibu_method: 'tinseth',
     targets: { og: '', fg: '', ibu: '', color: '', abv: '' },
     fermentables: [], hops: [], yeast: [], attenuation_override: '',
-    mash: { efficiency: 72, water_grain_ratio: 3.5, absorption_rate: 0.8, boil_time_min: 60, evaporation_rate: 10, screen_water_l: 0, sparge_count: 3, sparge_mode: 'auto', sparge_water_liters: [], steps: [], notes: '' },
+    mash: { efficiency: 72, water_grain_ratio: 3.5, absorption_rate: 0.8, boil_time_min: 60, evaporation_rate: 10, screen_water_l: 0, sparge_count: 3, sparge_mode: 'auto', sparge_water_liters: [], steps: [], notes: '', workflow: { preheat_offset_c: 5, sparge_temperature_c: 78, iodine_check_required: true, whirlpool_time_min: 20, cooling_temperature_c: 18, operations: {} } },
     fermentation: { target_temperature: '', target_days: '', cold_storage_temperature: '', notes: '', steps: [] } };
 }
 export function normalizeDesign(saved = {}, version = {}) {
@@ -15,7 +15,7 @@ export function normalizeDesign(saved = {}, version = {}) {
   const d = { ...base, ...saved, schema_version: 2,
     brew_volume_l: Number(saved.brew_volume_l) > 0 ? saved.brew_volume_l : version.base_volume_l ?? base.brew_volume_l,
     targets: { og: version.original_gravity || '', fg: version.final_gravity || '', ibu: version.bitterness_ibu || '', color: version.color_ebc || '', abv: version.alcohol_abv || '', ...saved.targets },
-    mash: { ...base.mash, ...saved.mash }, fermentation: { ...base.fermentation, ...saved.fermentation } };
+    mash: { ...base.mash, ...saved.mash, workflow: { ...base.mash.workflow, ...(saved.mash?.workflow || {}), operations: { ...base.mash.workflow.operations, ...(saved.mash?.workflow?.operations || {}) } } }, fermentation: { ...base.fermentation, ...saved.fermentation } };
   d.hops = (d.hops || []).map(line => {
     const time = String(line.time ?? '60');
     const use = line.use || (['FWH', 'WP', 'DH', '0'].includes(time) ? time : 'boil');

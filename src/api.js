@@ -34,17 +34,29 @@ async function request(path, options = {}) {
     ...(method !== "GET" && csrfToken() ? { "X-CSRF-Token": csrfToken() } : {}),
     ...(fetchOptions.headers || {})
   };
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...fetchOptions,
-    method,
-    headers,
-    credentials: "include"
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...fetchOptions,
+      method,
+      headers,
+      credentials: "include",
+      signal: fetchOptions.signal || controller.signal
+    });
+  } catch (cause) {
+    window.clearTimeout(timeoutId);
+    if (cause?.name === "AbortError") throw new ApiError("REQUEST_TIMEOUT", "请求超时，请检查服务连接后重试。", 0);
+    throw cause;
+  }
   let payload;
   try {
     payload = await response.json();
   } catch {
     throw new ApiError("INVALID_RESPONSE", "服务返回了无法解析的响应。", response.status);
+  } finally {
+    window.clearTimeout(timeoutId);
   }
   if (!response.ok || payload.error) {
     const error = payload.error || {};
@@ -287,6 +299,9 @@ export const brewApi = {
   listProductionBatches(params = {}) {
     return request(`/api/v1/production-batches?${new URLSearchParams(params).toString()}`);
   },
+  getProductionBatch(id) {
+    return request(`/api/v1/production-batches/${id}`);
+  },
   createProductionBatch(data) {
     return request("/api/v1/production-batches", {
       method: "POST",
@@ -354,7 +369,7 @@ export const brewApi = {
     });
   },
   getTasks() {
-    return request("/api/v1/tasks");
+    return request("/api/v1/tasks?page_size=100");
   },
   listMaster(resource, params = {}) {
     const query = new URLSearchParams(params);
@@ -433,6 +448,9 @@ export const brewApi = {
   listRecipes(params = {}) {
     return request(`/api/v1/recipes?${new URLSearchParams(params).toString()}`);
   },
+  getRecipe(id) {
+    return request(`/api/v1/recipes/${id}`);
+  },
   createRecipe(data) {
     return request("/api/v1/recipes", {
       method: "POST",
@@ -447,6 +465,9 @@ export const brewApi = {
   },
   listRecipeVersions(recipeId) {
     return request(`/api/v1/recipes/${recipeId}/versions`);
+  },
+  listRecipeProductionRuns(recipeId, params = {}) {
+    return request(`/api/v1/recipes/${recipeId}/production-runs?${new URLSearchParams(params).toString()}`);
   },
   getRecipeVersion(versionId) {
     return request(`/api/v1/recipe-versions/${versionId}`);
@@ -476,9 +497,9 @@ export const brewApi = {
       method: "PUT", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
     });
   },
-  recipeVersionAction(versionId, action, recordVersion, reason = "") {
+  recipeVersionAction(versionId, action, recordVersion, reason = "", comment = "") {
     return request(`/api/v1/recipe-versions/${versionId}/${action}`, {
-      method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify({ record_version: recordVersion, reason })
+      method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify({ record_version: recordVersion, reason, comment })
     });
   },
   listDemands(params = {}) {
@@ -491,8 +512,28 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  getDemand(id) {
+    return request(`/api/v1/demands/${id}`);
+  },
+  updateDemand(id, data) {
+    return request(`/api/v1/demands/${id}`, {
+      method: "PATCH",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  demandAction(id, action, version, reason = "") {
+    return request(`/api/v1/demands/${id}/${action}`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify({ version, reason })
+    });
+  },
   listProductionPlans(params = {}) {
     return request(`/api/v1/production-plans?${new URLSearchParams(params).toString()}`);
+  },
+  listProductionPlanAssignees(factoryId) {
+    return request(`/api/v1/production-plan-assignees?${new URLSearchParams({ factory_id: factoryId }).toString()}`);
   },
   createProductionPlan(data) {
     return request("/api/v1/production-plans", {
