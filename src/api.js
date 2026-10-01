@@ -51,10 +51,12 @@ async function request(path, options = {}) {
     throw cause;
   }
   let payload;
+  const responseText = await response.text();
   try {
-    payload = await response.json();
+    payload = responseText ? JSON.parse(responseText) : {};
   } catch {
-    throw new ApiError("INVALID_RESPONSE", "服务返回了无法解析的响应。", response.status);
+    window.clearTimeout(timeoutId);
+    throw new ApiError("INVALID_RESPONSE", responseText?.trim() || "Service returned an empty or invalid response.", response.status);
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -211,6 +213,13 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  updateInventoryCountLines(id, data) {
+    return request(`/api/v1/inventory/counts/${id}/lines`, {
+      method: "PUT",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
   inventoryCountAction(id, action, data) {
     return request(`/api/v1/inventory/counts/${id}/${action}`, {
       method: "POST",
@@ -228,6 +237,16 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  listPurchaseSourcePlans() {
+    return request("/api/v1/purchase-requisitions/source-plans");
+  },
+  aggregatePurchaseRequisitions(data) {
+    return request("/api/v1/purchase-requisitions/aggregate", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
   purchaseRequisitionAction(id, action, data) {
     return request(`/api/v1/purchase-requisitions/${id}/${action}`, {
       method: "POST",
@@ -240,6 +259,20 @@ export const brewApi = {
   },
   createPurchaseOrder(data) {
     return request("/api/v1/purchase-orders", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  createPurchaseOrderFromRequisitions(data) {
+    return request("/api/v1/purchase-orders/from-requisitions", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  createSupplierShipment(orderId, data) {
+    return request(`/api/v1/purchase-orders/${orderId}/shipments`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey() },
       body: JSON.stringify(data)
@@ -271,6 +304,13 @@ export const brewApi = {
   },
   listQualityInspections(params = {}) {
     return request(`/api/v1/quality-inspections?${new URLSearchParams(params).toString()}`);
+  },
+  createQualityInspection(data) {
+    return request("/api/v1/quality-inspections", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
   },
   updateQualityResults(id, data) {
     return request(`/api/v1/quality-inspections/${id}/results`, {
@@ -366,6 +406,16 @@ export const brewApi = {
   outboundOrderAction(id, action, data) {
     return request(`/api/v1/outbound-orders/${id}/${action}`, {
       method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  listApprovals(params = {}) {
+    return request('/api/v1/approvals?' + new URLSearchParams({ page_size: 100, ...params }).toString());
+  },
+  approvalAction(id, action, data) {
+    return request('/api/v1/approvals/' + id + '/' + action, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey() },
+      body: JSON.stringify(data)
     });
   },
   getTasks() {

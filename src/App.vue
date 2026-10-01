@@ -84,7 +84,7 @@
         <FactoryPage v-else-if="currentPage === 'factory'" :permissions="authContext.permissions" />
         <ProductionPage v-else-if="currentPage === 'production'" :permissions="authContext.permissions" />
         <RecipePage v-else-if="currentPage === 'recipe'" :permissions="authContext.permissions" :review-version-id="pendingRecipeReviewId" @review-opened="pendingRecipeReviewId = ''" />
-        <InventoryPage v-else-if="currentPage === 'inventory'" @toast="showToast" />
+        <InventoryProcurementPage v-else-if="currentPage === 'inventory'" :permissions="authContext.permissions" @toast="showToast" />
         <TracePage v-else-if="currentPage === 'trace'" />
         <ReportsPage v-else-if="currentPage === 'reports'" />
         <SettingsPage v-else-if="currentPage === 'settings'" :permissions="authContext.permissions" />
@@ -103,6 +103,7 @@ import { computed, defineComponent, h, onMounted, onUpdated, reactive, ref, watc
 import { brewApi } from "./api";
 import RecipePage from "./components/RecipePage.vue";
 import ProductionRecipeEditor from "./components/ProductionRecipeEditor.vue";
+import InventoryProcurementPage from "./components/InventoryProcurementPage.vue";
 import { calculateRecipe } from "./recipe-calculations";
 import { navSections, pageMeta, roles } from "./data";
 
@@ -2964,6 +2965,7 @@ const TasksPage = defineComponent({
   emits: ["open-recipe-review"],
   setup(_props, { emit }) {
     const tasks = ref([]);
+    const approvals = ref([]);
     const loading = ref(false);
     const error = ref("");
     const reviewDemand = ref(null);
@@ -2980,21 +2982,57 @@ const TasksPage = defineComponent({
       if (taskFilter.value === "done") return finishedTasks.value;
       return tasks.value;
     });
+    function approvalTask(item) {
+      return {
+        id: 'approval-' + item.id,
+        name: item.name || item.approval_type,
+        task_type: '采购审批',
+        approval_type: item.approval_type,
+        approval_id: item.id,
+        role_code: item.role_code,
+        target_model: item.target_model,
+        target_id: item.target_id,
+        return_reason: item.return_reason || (item.target_model === 'purchase.order' ? item.comment : ''),
+        priority: item.request_type === 'emergency' ? '2' : '1',
+        state: item.state === 'pending' ? 'pending' : 'done',
+        approval_state: item.instance_state || item.state,
+        assignee: null,
+        due_at: null,
+        last_comment: item.comment || item.return_reason || '',
+        version: item.version,
+      };
+    }
     async function load() {
       loading.value = true;
       error.value = "";
-      try { tasks.value = await brewApi.getTasks(); }
+      try {
+        const [taskData, approvalData] = await Promise.all([brewApi.getTasks(), brewApi.listApprovals()]);
+        approvals.value = approvalData || [];
+        tasks.value = [...(taskData || []), approvals.value.map(approvalTask)];
+        tasks.value = tasks.value.flat();
+      }
       catch (cause) { error.value = cause.message || "任务加载失败。"; }
       finally { loading.value = false; }
     }
     function stateLabel(task) {
+      if (task.approval_id) return ({ pending: '待审批', done: task.approval_state === 'returned' ? '已退回' : '已同意' })[task.state] || task.state;
       if (task.state === "done" && ["recipe_review", "demand_review"].includes(task.task_type) && task.last_comment?.startsWith("退回修改：")) return "已退回修改";
       if (task.state === "pending" && task.task_type === "recipe_revision") return "待修改";
       return ({ pending: "待领取", claimed: "已领取", in_progress: "进行中", done: "已完成", returned: "已退回", cancelled: "已取消" })[task.state] || task.state;
     }
     function taskTypeLabel(task) { return ({ recipe_review: "配方审核", recipe_revision: "配方修改", demand_review: "产品需求确认", mashing: "糖化执行", fermentation: "发酵执行", material_preparation: "备料" })[task.task_type] || task.task_type; }
     function taskComment(task) { return (task.last_comment || "").replace(/^(退回修改：|审核通过：)/, ""); }
-    async function openDemandReview(id) {
+    async function resolveApproval(task, action) {
+      let comment = '';
+      if (action === 'return') {
+        comment = window.prompt('请输入退回原因', '');
+        if (comment === null || !comment.trim()) return;
+      }
+      try {
+        await brewApi.approvalAction(task.approval_id, action, { version: task.version, comment: comment.trim() });
+        await load();
+      } catch (cause) { error.value = cause.message || '审批处理失败'; }
+    }    async function openDemandReview(id) {
       reviewReason.value = "";
       reviewError.value = "";
       try { reviewDemand.value = await brewApi.getDemand(id); }
@@ -3013,7 +3051,7 @@ const TasksPage = defineComponent({
       finally { reviewSaving.value = false; }
     }
     onMounted(load);
-    return { tasks, openTasks, finishedTasks, taskFilter, taskFilterLabels, visibleTasks, loading, error, reviewDemand, reviewReason, reviewError, reviewSaving, load, stateLabel, taskTypeLabel, taskComment, demandPackagingSummary, openDemandReview, resolveDemand, openRecipeReview: (id) => emit("open-recipe-review", id) };
+    return { tasks, openTasks, finishedTasks, taskFilter, taskFilterLabels, visibleTasks, loading, error, reviewDemand, reviewReason, reviewError, reviewSaving, load, stateLabel, taskTypeLabel, taskComment, demandPackagingSummary, openDemandReview, resolveDemand, resolveApproval, openRecipeReview: (id) => emit("open-recipe-review", id) };
   },
   template: `
     <div class="stats-grid">
@@ -3022,7 +3060,7 @@ const TasksPage = defineComponent({
       <button class="stat-card task-stat-card" :class="{ active: taskFilter === 'done' }" @click="taskFilter = 'done'"><div class="stat-head"><div class="stat-label">已完成</div><div class="mono">●</div></div><div class="stat-value">{{ finishedTasks.length }}</div><div class="stat-change up">含已退回审核记录</div></button>
       <button class="stat-card task-stat-card" :class="{ active: taskFilter === 'all' }" @click="taskFilter = 'all'"><div class="stat-head"><div class="stat-label">全部任务</div><div class="mono">●</div></div><div class="stat-value">{{ tasks.length }}</div><div class="stat-change up">角色与本人范围</div></button>
     </div>
-    <div class="panel"><div class="panel-header"><div class="panel-title">{{ taskFilterLabels[taskFilter] }}</div><button class="btn btn-sm btn-secondary" @click="load">刷新</button></div><div class="panel-body task-list"><div v-if="loading" class="empty">正在加载...</div><div v-else-if="error" class="master-error">{{ error }}</div><div v-for="task in visibleTasks" v-else :key="task.id" class="task-card task-card-rich"><div class="task-kind-icon" :class="['recipe_review','recipe_revision'].includes(task.task_type) ? 'recipe-review-icon' : 'generic-task-icon'"><svg v-if="['recipe_review','recipe_revision'].includes(task.task_type)" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1-2-2Z"/><path d="M14 3.75v4h4M8.5 12h7M8.5 15.5h5M8.5 8.5h2"/></svg><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5zM8 9h8M8 12h8M8 15h5"/></svg></div><div class="task-card-content"><div class="task-title">{{ task.name }}</div><div class="task-meta"><span class="task-type-pill" :class="{ recipe: ['recipe_review','recipe_revision'].includes(task.task_type) }">{{ taskTypeLabel(task) }}</span><span v-if="task.due_at">截止 {{ task.due_at.replace('T',' ').slice(0,16) }}</span><span v-if="task.assignee?.name">处理人 {{ task.assignee.name }}</span></div><div v-if="task.last_comment" class="task-review-note"><strong>{{ task.task_type === 'recipe_revision' || (task.state === 'done' && task.last_comment.startsWith('退回修改：')) ? '退回意见' : '处理备注' }}</strong><span>{{ taskComment(task) }}</span></div></div><div class="task-card-actions"><StatusTag :text="stateLabel(task)" /><button v-if="task.task_type === 'recipe_review' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方并审核</button><button v-else-if="task.task_type === 'recipe_review'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看审核流程</button><button v-else-if="task.task_type === 'recipe_revision' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">修改配方并重新提交</button><button v-else-if="task.task_type === 'recipe_revision'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方版本</button><button v-else-if="task.task_type === 'demand_review'" class="btn btn-xs btn-outline" @click="openDemandReview(task.target_id)">{{ ['done','cancelled'].includes(task.state) ? '查看需求' : '查看并确认需求' }}</button></div></div><div v-if="!loading && !error && !visibleTasks.length" class="empty">{{ taskFilter === 'pending' ? '当前角色暂无待办' : taskFilter === 'urgent' ? '当前没有紧急任务' : taskFilter === 'done' ? '暂无已完成任务' : '暂无任务记录' }}</div></div></div>
+    <div class="panel"><div class="panel-header"><div class="panel-title">{{ taskFilterLabels[taskFilter] }}</div><button class="btn btn-sm btn-secondary" @click="load">刷新</button></div><div class="panel-body task-list"><div v-if="loading" class="empty">正在加载...</div><div v-else-if="error" class="master-error">{{ error }}</div><div v-for="task in visibleTasks" v-else :key="task.id" class="task-card task-card-rich"><div class="task-kind-icon" :class="['recipe_review','recipe_revision'].includes(task.task_type) ? 'recipe-review-icon' : 'generic-task-icon'"><svg v-if="['recipe_review','recipe_revision'].includes(task.task_type)" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1-2-2Z"/><path d="M14 3.75v4h4M8.5 12h7M8.5 15.5h5M8.5 8.5h2"/></svg><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5zM8 9h8M8 12h8M8 15h5"/></svg></div><div class="task-card-content"><div class="task-title">{{ task.name }}</div><div class="task-meta"><span class="task-type-pill" :class="{ recipe: ['recipe_review','recipe_revision'].includes(task.task_type) }">{{ taskTypeLabel(task) }}</span><span v-if="task.due_at">截止 {{ task.due_at.replace('T',' ').slice(0,16) }}</span><span v-if="task.assignee?.name">处理人 {{ task.assignee.name }}</span></div><div v-if="task.last_comment" class="task-review-note"><strong>{{ task.task_type === 'recipe_revision' || (task.state === 'done' && task.last_comment.startsWith('退回修改：')) ? '退回意见' : '处理备注' }}</strong><span>{{ taskComment(task) }}</span></div></div><div class="task-card-actions"><StatusTag :text="stateLabel(task)" /><button v-if="task.task_type === 'recipe_review' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方并审核</button><button v-else-if="task.task_type === 'recipe_review'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看审核流程</button><button v-else-if="task.task_type === 'recipe_revision' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">修改配方并重新提交</button><button v-else-if="task.task_type === 'recipe_revision'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方版本</button><button v-else-if="task.task_type === 'demand_review'" class="btn btn-xs btn-outline" @click="openDemandReview(task.target_id)">{{ ['done','cancelled'].includes(task.state) ? '查看需求' : '查看并确认需求' }}</button><template v-else-if="task.approval_id && task.state === 'pending'"><button class="btn btn-xs btn-outline" @click="resolveApproval(task, 'return')">退回</button><button class="btn btn-xs btn-primary" @click="resolveApproval(task, 'approve')">通过</button></template></div></div><div v-if="!loading && !error && !visibleTasks.length" class="empty">{{ taskFilter === 'pending' ? '当前角色暂无待办' : taskFilter === 'urgent' ? '当前没有紧急任务' : taskFilter === 'done' ? '暂无已完成任务' : '暂无任务记录' }}</div></div></div>
     <div v-if="reviewDemand" class="equipment-modal-mask" @click.self="reviewDemand = null"><section class="equipment-modal demand-review-modal" role="dialog" aria-modal="true" aria-label="确认产品需求"><div class="equipment-modal-header"><div><div class="modal-title">确认产品需求 · {{ reviewDemand.product?.name || '' }}</div><div class="modal-subtitle">核对产品、包装和交付要求后给出结论</div></div><button class="equipment-close" type="button" aria-label="关闭" @click="reviewDemand = null">×</button></div><div class="equipment-modal-body demand-review-body"><div class="demand-review-summary"><div><span>客户</span><strong>{{ reviewDemand.customer?.name || '—' }}</strong></div><div><span>产品</span><strong>{{ reviewDemand.product?.name || '—' }}</strong></div><div><span>包装方式</span><strong>{{ demandPackagingSummary(reviewDemand) }}</strong></div><div><span>包装数量</span><strong>{{ reviewDemand.package_qty }} {{ reviewDemand.packaging_method === 'keg' ? '桶' : reviewDemand.packaging_method === 'box' ? '箱' : '件' }}</strong></div><div><span>所需酒液</span><strong>{{ reviewDemand.requested_volume_l }} L</strong></div><div><span>要求出品日期</span><strong>{{ reviewDemand.requested_delivery_date || '—' }}</strong></div></div><div v-if="reviewDemand.customer_reference || reviewDemand.notes" class="demand-review-notes"><span>客户要求</span><p>{{ reviewDemand.customer_reference ? '参考号：' + reviewDemand.customer_reference : '' }} {{ reviewDemand.notes }}</p></div><div v-if="reviewDemand.decision_reason" class="demand-review-notes"><span>处理意见</span><p>{{ reviewDemand.decision_reason }}</p></div><label v-if="reviewDemand.state === 'submitted'" class="demand-review-reason"><span>退回原因 <small>退回修改时必填</small></span><textarea v-model.trim="reviewReason" rows="3" placeholder="说明需要销售修改的内容"></textarea></label><div v-if="reviewError" class="master-error">{{ reviewError }}</div></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="reviewDemand = null">关闭</button><template v-if="reviewDemand.state === 'submitted'"><button class="btn btn-outline" type="button" :disabled="reviewSaving" @click="resolveDemand('return')">退回修改</button><button class="btn btn-primary" type="button" :disabled="reviewSaving" @click="resolveDemand('confirm')">{{ reviewSaving ? '处理中...' : '确认需求' }}</button></template></div></section></div>
   `
 });
