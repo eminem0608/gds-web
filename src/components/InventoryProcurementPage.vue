@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { brewApi } from "../api";
+import StockBrowserPage from "./StockBrowserPage.vue";
 
 const props = defineProps({ permissions: { type: Array, default: () => [] } });
 const emit = defineEmits(["toast"]);
@@ -38,6 +39,7 @@ const canExport = computed(() => isAdmin.value || props.permissions.some((item) 
 
 const tabs = [
   { id: "overview", label: "总览" },
+  { id: "stock", label: "库存" },
   { id: "requisitions", label: "采购需求" },
   { id: "orders", label: "采购执行" },
   { id: "receiving", label: "收货质检" },
@@ -254,21 +256,17 @@ onMounted(load);
 
 <template>
   <div class="inventory-workbench">
-    <div class="inventory-hero">
-      <div><span class="inventory-eyebrow">库存采购工作台</span><h2>从缺料到入库，一条主线处理</h2><p>普通采购来自生产缺口；紧急采购单独标识并强制审批。库存余额只由业务单据更新。</p></div>
-      <div class="inventory-hero-actions"><button v-if="canPurchase" class="btn btn-outline" type="button" @click="openEmergency">紧急采购</button><button v-if="canPurchase" class="btn btn-primary" type="button" @click="openPlan">汇总计划缺口</button><button class="icon-action" type="button" title="刷新" aria-label="刷新" :disabled="loading" @click="load">↻</button></div>
-    </div>
     <div v-if="error" class="master-error inventory-error">{{ error }}</div>
-    <div class="inventory-flow"><span>生产缺口</span><b>›</b><span>需求审批</span><b>›</b><span>采购下单</span><b>›</b><span>到货质检</span><b>›</b><span>合格入库</span><b>›</b><span>对账导出</span></div>
-    <div class="inventory-tabs"><button v-for="item in tabs" :key="item.id" type="button" :class="{ active: tab === item.id }" @click="tab = item.id">{{ item.label }}</button></div>
+    <div class="inventory-tabs"><button v-for="item in tabs" :key="item.id" type="button" :class="{ active: tab === item.id }" @click="tab = item.id">{{ item.label }}</button><button v-if="tab !== 'stock'" class="inventory-tab-refresh" type="button" :disabled="loading" @click="load" aria-label="刷新当前数据">↻ 刷新</button></div>
 
-    <template v-if="tab === 'overview'">
+    <StockBrowserPage v-if="tab === 'stock'" />
+    <template v-else-if="tab === 'overview'">
       <div class="inventory-metric-grid"><div v-for="item in metrics" :key="item.label" class="inventory-metric"><span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.hint }}</small></div></div>
       <section class="inventory-section"><header><div><h3>下一步操作</h3><p>只显示当前流程需要推进的事项</p></div><span>{{ queue.length }} 项</span></header><div v-if="queue.length" class="action-queue"><button v-for="item in queue" :key="item.type + item.name" type="button" @click="tab = item.tab"><span>{{ item.type }}</span><strong>{{ item.name }}</strong><em>{{ item.text }}</em><b>›</b></button></div><div v-else class="inventory-empty">当前没有需要处理的采购库存事项</div></section>
       <section class="inventory-section"><header><div><h3>库存健康度</h3><p>待检、预占与冻结数量均不计入可用库存</p></div></header><div class="stock-health"><div><span>账面库存</span><strong>{{ number(summary.totals?.on_hand,3) }}</strong></div><div><span>业务预占</span><strong>{{ number(summary.totals?.reserved,3) }}</strong></div><div><span>待检库存</span><strong>{{ number(summary.totals?.pending_quality,3) }}</strong></div><div><span>在途库存</span><strong>{{ number(summary.totals?.incoming,3) }}</strong></div><div><span>冻结库存</span><strong>{{ number(summary.totals?.frozen,3) }}</strong></div></div></section>
     </template>
 
-    <section v-else-if="tab === 'requisitions'" class="inventory-section"><header><div><h3>采购需求</h3><p>计划缺料自动汇总；紧急采购必须填写原因并单独审批</p></div><div class="section-actions"><button v-if="canPurchase" class="btn btn-sm btn-outline" @click="openEmergency">新建紧急采购</button><button v-if="canPurchase" class="btn btn-sm btn-primary" @click="openPlan">汇总缺口</button></div></header>
+    <section v-else-if="tab === 'requisitions'" class="inventory-section"><header><div><h3>采购需求</h3><p>计划缺料自动汇总；紧急采购必须填写原因并单独审批</p></div><div class="section-actions"><button v-if="canPurchase" class="btn btn-sm btn-outline" @click="openEmergency">紧急采购</button><button v-if="canPurchase" class="btn btn-sm btn-primary" @click="openPlan">汇总计划缺口</button></div></header>
       <div class="work-table-wrap"><table class="work-table"><thead><tr><th>需求单</th><th>来源</th><th>厂区 / 日期</th><th>物料缺口</th><th>状态</th><th>下一步</th></tr></thead><tbody><tr v-for="item in requisitions" :key="item.id"><td><strong>{{ item.name }}</strong><small>{{ item.requester?.name || '-' }}</small></td><td><span class="source-badge" :class="{ emergency: item.request_type === 'emergency' }">{{ requestType(item) }}</span><small>{{ item.emergency_reason || item.reason || '-' }}</small></td><td>{{ item.factory?.name }}<small>{{ item.need_date }}</small></td><td><strong>{{ item.lines.length }} 项</strong><small>{{ item.lines.map(line => line.product?.name).join('、') }}</small></td><td><span class="state-pill" :data-state="item.state">{{ stateText(item.state) }}</span><small v-if="item.return_reason">退回原因：{{ item.return_reason }}</small></td><td class="row-actions"><button v-if="canPurchase && ['draft','returned'].includes(item.state)" class="btn btn-xs btn-primary" @click="requisitionAction(item,'submit')">提交审批</button><button v-if="canApproveRequisition && item.state === 'submitted'" class="btn btn-xs btn-outline" @click="requisitionAction(item,'approve')">审批</button><button v-if="canApproveRequisition && item.state === 'submitted'" class="btn btn-xs btn-danger" @click="requisitionAction(item,'return')">退回</button><button v-if="canPurchase && item.state === 'approved' && item.lines.some(line => remaining(line) > 0)" class="btn btn-xs btn-primary" @click="openOrder(item)">生成采购单</button></td></tr><tr v-if="!requisitions.length"><td colspan="6" class="inventory-empty">暂无采购需求</td></tr></tbody></table></div>
     </section>
 
@@ -291,3 +289,7 @@ onMounted(load);
       <div v-if="modalError" class="master-error wide">{{ modalError }}</div></div><footer><button class="btn btn-secondary" type="button" @click="modal = ''">取消</button><button class="btn btn-primary" type="button" :disabled="saving" @click="submitModal">{{ saving ? '处理中...' : '确认' }}</button></footer></section></div>
   </div>
 </template>
+
+<style scoped>
+.inventory-tabs .inventory-tab-refresh{margin-left:auto;font-size:12px;align-self:center;padding:8px 12px;border:1px solid #ffffff18;border-radius:7px;color:#aaa}
+</style>

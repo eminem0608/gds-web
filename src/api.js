@@ -421,6 +421,13 @@ export const brewApi = {
   getTasks() {
     return request("/api/v1/tasks?page_size=100");
   },
+  taskAction(id, action, data) {
+    return request(`/api/v1/tasks/${id}/${action}`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
   listMaster(resource, params = {}) {
     const query = new URLSearchParams(params);
     return request(`/api/v1/${resource}?${query.toString()}`);
@@ -585,6 +592,13 @@ export const brewApi = {
   listProductionPlanAssignees(factoryId) {
     return request(`/api/v1/production-plan-assignees?${new URLSearchParams({ factory_id: factoryId }).toString()}`);
   },
+  previewPlanInventory(data) {
+    return request("/api/v1/production-plan-inventory-preview", { method: "POST", body: JSON.stringify(data) });
+  },
+  getPlanProgress(id) { return request(`/api/v1/production-plans/${id}/progress`); },
+  productionPlanAction(id, action, data) {
+    return request(`/api/v1/production-plans/${id}/${action}`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
+  },
   createProductionPlan(data) {
     return request("/api/v1/production-plans", {
       method: "POST",
@@ -593,3 +607,12 @@ export const brewApi = {
     });
   }
 };
+
+Object.assign(brewApi, {
+  packagingSchema() { return request('/api/v1/packaging-materials/schema'); },
+  listPackaging(params={}) { return request(`/api/v1/packaging-materials?${new URLSearchParams(params)}`); },
+  savePackaging(id,data) { return request(`/api/v1/packaging-materials${id ? '/'+id : ''}`, { method:id?'PATCH':'POST',headers:{'Idempotency-Key':idempotencyKey()},body:JSON.stringify(data) }); },
+  packagingAction(id,action,data) { return request(`/api/v1/packaging-materials/${id}/${action}`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey()},body:JSON.stringify(data)}); },
+  browseStock(params={}) { return request(`/api/v1/inventory/browse?${new URLSearchParams(params)}`); },
+  stockProduct(id,params={}) { return request(`/api/v1/inventory/browse/${id}?${new URLSearchParams(params)}`); }
+});

@@ -91,6 +91,11 @@ function recipeStatusClass(recipe) {
       : ['returned', 'inactive'].includes(state) ? 'is-muted'
         : 'is-neutral';
 }
+function recipeOpenActionText(recipe) {
+  if (canManage.value && recipe.latest_version_state === 'draft') return '编辑草稿';
+  if (canManage.value && recipe.latest_version_state === 'returned') return '编辑退回版本';
+  return '查看基础工艺';
+}
 function versionActionText(item) {
   if (canReview.value && item.state === 'submitted') return '查看 / 审核';
   if (canManage.value && ['draft', 'returned'].includes(item.state)) return '查看 / 编辑';
@@ -163,7 +168,9 @@ async function openRecipe(recipe) {
   await run(async () => {
     selectedRecipe.value = recipe;
     versions.value = await brewApi.listRecipeVersions(recipe.id);
-    const target = versions.value.find(item => item.state === 'active') || versions.value[0];
+    const target = (canManage.value ? versions.value.find(item => ['draft', 'returned'].includes(item.state)) : null)
+      || versions.value.find(item => item.state === 'active')
+      || versions.value[0];
     if (target) await loadVersion(target);
     else showVersionHistory.value = true;
   });
@@ -342,7 +349,7 @@ watch(() => props.reviewVersionId, (versionId) => {
               <div class="rw-library-recipe-version"><span>生产基准</span><b>{{ recipe.active_version_id ? '已启用' : recipe.latest_version_state ? stateLabel(recipe.latest_version_state) : '尚无版本' }}</b></div>
             </div>
             <button class="btn btn-outline" type="button" @click="openVersionHistory(recipe)">工艺与批次</button>
-            <button class="btn btn-secondary" type="button" @click="openRecipe(recipe)">查看基础工艺</button>
+            <button class="btn btn-secondary" type="button" @click="openRecipe(recipe)">{{ recipeOpenActionText(recipe) }}</button>
           </article>
         </section>
       </div>
@@ -451,7 +458,28 @@ watch(() => props.reviewVersionId, (versionId) => {
               <div v-if="tab === 'mash'" class="rw-sections"><MashWorkflowDesigner :mash="design.mash" :fermentables="design.fermentables" :hops="design.hops" :fermentation="design.fermentation" :metrics="metrics" /></div>
               <div v-if="tab === 'fermentation'" class="rw-sections">
                 <section class="rw-section"><div class="rw-fields"><label><span>目标发酵温度(℃)</span><input v-model.number="design.fermentation.target_temperature" type="number" step="0.1"></label><label><span>目标发酵天数</span><input v-model.number="design.fermentation.target_days" type="number" min="0" step="0.5"></label><label><span>冷储温度(℃)</span><input v-model.number="design.fermentation.cold_storage_temperature" type="number" step="0.1"></label></div></section>
-                <section class="rw-section"><div class="rw-heading"><strong>发酵执行条件</strong><button type="button" class="btn btn-outline" @click="design.fermentation.steps.push(newStep())">＋ 添加步骤</button></div><div class="rw-table-scroll"><table class="rw-table rw-fermentation"><colgroup><col style="width:5%"><col style="width:15%"><col style="width:35%"><col style="width:19%"><col style="width:20%"><col style="width:6%"></colgroup><thead><tr><th>序号</th><th>条件</th><th>条件达成值</th><th>处理动作</th><th>处理目标值</th><th>操作</th></tr></thead><tbody><tr v-for="(s,i) in design.fermentation.steps" :key="i"><td>{{ i+1 }}</td><td><select v-model="s.condition" @change="s.condition_value = ''"><option v-for="(meta,key) in conditionMeta" :key="key" :value="key">{{ meta[0] }}</option></select></td><td><template v-if="s.condition === 'time'"><div class="rw-segment"><label v-for="[mode,label] in [['daily','每天'],['day','第几天'],['interval','每隔几天']]" :key="mode" :class="{ active: s.schedule_type === mode }"><input v-model="s.schedule_type" type="radio" :name="'schedule-'+i" :value="mode">{{ label }}</label></div><div v-if="s.schedule_type !== 'daily'" class="rw-condition"><span>{{ s.schedule_type === 'day' ? '第' : '每隔' }}</span><input v-if="s.schedule_type === 'day'" v-model.number="s.day_value" type="number" min="1" step="1" required><input v-else v-model.number="s.interval_days" type="number" min="1" step="1" required><span>天</span></div><p v-else class="rw-hint">每天执行一次</p></template><div v-else class="rw-condition"><select v-model="s.operator" aria-label="比较符"><option v-for="op in ['=','>','>=','<','<=']" :key="op" :value="op">{{ op }}</option></select><input v-model.number="s.condition_value" type="number" step="any" required :aria-label="conditionMeta[s.condition][0]"><span>{{ conditionMeta[s.condition][1] }}</span></div></td><td><select v-model="s.action"><option v-for="(label,key) in actions" :key="key" :value="key">{{ label }}</option></select></td><td><input v-model="s.target" :required="['cool_to','increase_pressure'].includes(s.action)" :placeholder="s.action === 'cool_to' ? '目标温度(℃)' : s.action === 'increase_pressure' ? '目标压力(bar)' : '选填'"></td><td><button type="button" class="btn btn-danger" @click="design.fermentation.steps.splice(i,1)">×</button></td></tr></tbody></table></div><label><span>发酵要求</span><textarea v-model="design.fermentation.notes" rows="3"></textarea></label><p class="rw-hint">发酵度条件使用实测糖度（°P）计算。此处保存执行规则；实测记录与自动任务执行属于生产环节。</p></section>
+                <section class="rw-section rw-fermentation-section">
+                  <div class="rw-heading"><div class="rw-fermentation-heading"><strong>发酵执行条件</strong><small>为每条规则设置触发条件、执行频率和处理动作</small></div><button type="button" class="btn btn-outline" @click="design.fermentation.steps.push(newStep())">＋ 添加步骤</button></div>
+                  <div v-if="design.fermentation.steps.length" class="rw-fermentation-list">
+                    <article v-for="(s,i) in design.fermentation.steps" :key="i" class="rw-fermentation-card">
+                      <header><strong>步骤 {{ String(i+1).padStart(2,'0') }}</strong></header>
+                      <div class="rw-fermentation-grid">
+                        <label class="rw-fermentation-field"><span>触发条件</span><select v-model="s.condition" @change="s.condition_value = ''"><option v-for="(meta,key) in conditionMeta" :key="key" :value="key">{{ meta[0] }}</option></select></label>
+                        <div class="rw-fermentation-field"><span>{{ s.condition === 'time' ? '执行频率' : '达成标准' }}</span>
+                          <template v-if="s.condition === 'time'">
+                            <div class="rw-segment"><label v-for="[mode,label] in [['daily','每天'],['day','第几天'],['interval','每隔几天']]" :key="mode" :class="{ active: s.schedule_type === mode }"><input v-model="s.schedule_type" type="radio" :name="'schedule-'+i" :value="mode">{{ label }}</label></div>
+                            <div v-if="s.schedule_type !== 'daily'" class="rw-condition"><span>{{ s.schedule_type === 'day' ? '第' : '每隔' }}</span><input v-if="s.schedule_type === 'day'" v-model.number="s.day_value" type="number" min="1" step="1" required><input v-else v-model.number="s.interval_days" type="number" min="1" step="1" required><span>天</span></div><p v-else class="rw-hint">每天执行一次</p>
+                          </template>
+                          <div v-else class="rw-condition"><select v-model="s.operator" aria-label="比较符"><option v-for="op in ['=','>','>=','<','<=']" :key="op" :value="op">{{ op }}</option></select><input v-model.number="s.condition_value" type="number" step="any" required :aria-label="conditionMeta[s.condition][0]"><span>{{ conditionMeta[s.condition][1] }}</span></div>
+                        </div>
+                        <label class="rw-fermentation-field"><span>处理动作</span><select v-model="s.action"><option v-for="(label,key) in actions" :key="key" :value="key">{{ label }}</option></select></label>
+                        <label class="rw-fermentation-field"><span>处理目标值</span><div class="rw-fermentation-target-control"><input v-model="s.target" :required="['cool_to','increase_pressure'].includes(s.action)" :placeholder="s.action === 'cool_to' ? '目标温度（℃）' : s.action === 'increase_pressure' ? '目标压力（bar）' : '无需填写时留空'"><button type="button" class="rw-fermentation-delete" :aria-label="'删除步骤 ' + (i+1)" @click="design.fermentation.steps.splice(i,1)">×</button></div></label>
+                      </div>
+                    </article>
+                  </div>
+                  <div v-else class="rw-fermentation-empty">尚未添加发酵控制步骤。点击“添加步骤”来设置按时间或实测指标触发的操作。</div>
+                  <label><span>发酵要求</span><textarea v-model="design.fermentation.notes" rows="3" placeholder="补充接种、降温、压力控制或冷储要求"></textarea></label><p class="rw-hint">发酵度条件使用实测糖度（°P）计算。这里保存执行规则；实测记录与自动任务执行属于生产环节。</p>
+                </section>
               </div>
               <p v-if="editable" class="rw-hint rw-notes">保存时同步原料明细及糖化、煮沸和发酵工艺，并保留系统必需的进罐、转罐、包装放行确认节点。提交审核前请核对全部工艺。</p><p v-else class="rw-hint rw-notes">以下为本次提交的配方快照，请核对原料组成、工艺步骤和预计指标后给出审核结论。</p>
               <label class="rw-notes"><span>配方备注</span><textarea v-model="basic.notes" rows="2"></textarea></label>
@@ -714,16 +742,36 @@ label { display:grid; gap:7px; color:var(--text-secondary); font-size:13px; }
 @media(max-width:800px) { .rw-basic-grid { grid-template-columns:1fr; } .rw-basic-help { flex-direction:column; gap:4px; } }
 @media(max-width:480px) { .rw-basic-modal .equipment-modal-header, .rw-basic-modal .equipment-modal-footer { padding:18px; } .rw-basic-modal .rw-body { padding:18px; } .rw-basic-card { padding:16px; } .rw-basic-fields { grid-template-columns:1fr; } .rw-progress { gap:10px; } .rw-progress li + li::before { width:20px; margin-right:0; } }
 .rw-step { grid-template-columns:2fr 1fr 1fr auto; }
-.rw-fermentation { min-width:980px; }
+.rw-fermentation-heading { display:grid; gap:4px; }
+.rw-fermentation-heading small,.rw-fermentation-field>span small { color:var(--text-muted); font-size:11px; font-weight:400; }
+.rw-fermentation-list { display:grid; gap:10px; }
+.rw-fermentation-card { display:grid; grid-template-columns:minmax(94px,.34fr) minmax(170px,1fr) minmax(230px,1.3fr) minmax(170px,1fr) minmax(170px,1fr); align-items:center; gap:12px; padding:12px; border:1px solid var(--border-default); border-radius:10px; background:linear-gradient(140deg,rgba(212,168,83,.055),rgba(255,255,255,.012) 60%); }
+.rw-fermentation-card>header { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+.rw-fermentation-card>header strong { color:var(--accent-gold); font-size:12px; letter-spacing:.04em; }
+.rw-fermentation-grid { display:contents; }
+.rw-fermentation-target-control { display:grid; grid-template-columns:minmax(0,1fr) 26px; align-items:center; gap:10px; }
+.rw-fermentation-target-control>input { width:100%; height:40px; min-height:40px; max-width:none; padding-top:0; padding-bottom:0; }
+.rw-fermentation-delete { width:26px; height:26px; padding:0; border:0; border-radius:7px; background:rgba(255,255,255,.07); color:#c8bca9; font-size:18px; line-height:1; cursor:pointer; }
+.rw-fermentation-delete:hover { background:rgba(210,91,75,.18); color:#f09a8d; }
+.rw-fermentation-field { display:grid; align-content:start; gap:8px; min-width:0; color:var(--text-secondary); font-size:12px; }
+.rw-fermentation-field>span { display:flex; align-items:baseline; gap:8px; color:var(--text-muted); }
+.rw-fermentation-field>select,.rw-fermentation-field>input { width:100%; height:40px; min-height:40px; max-width:none; padding-top:0; padding-bottom:0; }
+.rw-fermentation-field .rw-segment { width:100%; height:40px; min-height:40px; align-items:stretch; }
+.rw-fermentation-field .rw-condition { grid-template-columns:56px minmax(50px,1fr) 28px; gap:5px; width:100%; margin-top:0; }
+.rw-fermentation-field .rw-condition input,.rw-fermentation-field .rw-condition select { width:100%; height:40px; min-height:40px; padding-top:0; padding-bottom:0; }
+.rw-fermentation-field .rw-segment label { padding:3px 6px; font-size:11px; }
+.rw-fermentation-field .rw-condition p { margin:0; }
+.rw-fermentation-empty { width:min(100%,1100px); padding:18px; border:1px dashed var(--border-default); border-radius:9px; color:var(--text-muted); background:rgba(255,255,255,.015); font-size:12px; }
 .rw-condition { display:grid; grid-template-columns:75px minmax(80px,1fr) 40px; gap:8px; align-items:center; margin-top:8px; }
-.rw-segment { display:flex; gap:4px; padding:4px; background:var(--bg-input); border-radius:8px; }
+.rw-segment { display:flex; gap:4px; padding:4px; background:var(--bg-input); border:1px solid var(--border-subtle); border-radius:8px; }
 .rw-segment label { flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:7px 2px; border:1px solid transparent; border-radius:6px; cursor:pointer; white-space:nowrap; }
-.rw-segment input { width:13px; accent-color:var(--accent-gold); margin:0; }
+.rw-segment input { flex:none; width:13px; height:13px; min-height:0; padding:0; accent-color:var(--accent-gold); margin:0; }
 .rw-segment .active { color:var(--accent-gold); border-color:rgba(212,168,83,.45); background:rgba(212,168,83,.1); }
 .rw-picker-mask { z-index:150; }
 .rw-invalid-product { opacity:.62; cursor:not-allowed; }
 .rw-unit-warning { background:rgba(219,101,89,.15)!important; color:#e6948c!important; }
-@media(max-width:700px) { .rw-body { padding:12px; } .rw-fields { grid-template-columns:1fr; } .rw-fields > .rw-hint { grid-column:auto; } .rw-section { padding:12px; } .rw-catalog-grid { grid-template-columns:1fr; } .equipment-modal-footer { flex-wrap:wrap; } .rw-design-content { padding:0 10px 12px; } .rw-design-disclosure > summary { padding:14px 12px; } .rw-review-actions { padding:14px; } .rw-review-actions-heading { align-items:flex-start; flex-direction:column; } .rw-review-actions-buttons { flex-direction:column-reverse; } .rw-review-actions-buttons .btn { width:100%; } }
+@media(max-width:1100px) { .rw-fermentation-card { grid-template-columns:minmax(80px,.35fr) minmax(0,1fr); align-items:start; } .rw-fermentation-card>header { grid-column:1/-1; padding-bottom:8px; border-bottom:1px solid var(--border-subtle); } .rw-fermentation-grid { display:grid; grid-column:1/-1; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; } }
+@media(max-width:700px) { .rw-body { padding:12px; } .rw-fields { grid-template-columns:1fr; } .rw-fields > .rw-hint { grid-column:auto; } .rw-section { padding:12px; } .rw-catalog-grid { grid-template-columns:1fr; } .equipment-modal-footer { flex-wrap:wrap; } .rw-design-content { padding:0 10px 12px; } .rw-design-disclosure > summary { padding:14px 12px; } .rw-review-actions { padding:14px; } .rw-review-actions-heading { align-items:flex-start; flex-direction:column; } .rw-review-actions-buttons { flex-direction:column-reverse; } .rw-review-actions-buttons .btn { width:100%; } .rw-fermentation-grid { grid-template-columns:1fr; gap:12px; } .rw-fermentation-card { grid-template-columns:1fr; padding:13px; } .rw-fermentation-card>header,.rw-fermentation-grid { grid-column:auto; } .rw-fermentation-card>header { border-bottom:1px solid var(--border-subtle); } }
 @media(max-width:520px) { .rw-review-panel { padding:14px; } .rw-review-steps { gap:3px; } .rw-review-step { font-size:10px; } .rw-review-step:not(:last-child)::after { left:calc(50% + 14px); width:calc(100% - 28px); } .rw-review-dot { width:24px; height:24px; } .rw-review-step:not(:last-child)::after { top:11px; } .rw-review-heading { align-items:flex-start; } }
 @media(max-width:700px) { .rw-recipe-filter-tools { align-items:stretch; flex-wrap:wrap; padding:12px 14px 0; } .rw-recipe-search { flex-basis:100%; } .rw-category-select { flex:1 1 220px; } .rw-clear-filters { flex:1; } .rw-recipe-filters { padding-left:14px; padding-right:14px; } }
 @media(max-width:760px) { .rw-library-controls { align-items:flex-start; flex-direction:column; padding:14px 14px 0; } .rw-library-groups { padding:14px; } .rw-library-recipe { grid-template-columns:38px minmax(0,1fr); } .rw-library-recipe > button { grid-column:2; justify-self:start; } .rw-library-detail-heading { align-items:flex-start; flex-direction:column; padding:18px; } .rw-library-detail-actions { width:100%; } .rw-library-detail-actions .btn { flex:1; } .rw-library-stats > div { padding:12px; } .rw-version-card,.rw-production-card { align-items:flex-start; flex-wrap:wrap; } .rw-version-content,.rw-production-content { flex-basis:calc(100% - 54px); } .rw-version-actions { width:100%; padding-left:51px; } .rw-production-card > button { margin-left:51px; } .rw-snapshot-stats { grid-template-columns:1fr; } }

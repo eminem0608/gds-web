@@ -1243,7 +1243,12 @@ button, input, select, textarea { font: inherit; }
 .production-recipe-facts strong { color: var(--text-primary); font-size: 14px; }
 .production-recipe-group { display: grid; gap: 9px; }
 .production-recipe-group-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-primary); font-size: 13px; font-weight: 600; }
-.production-recipe-line { display: grid; grid-template-columns: minmax(150px,1.5fr) repeat(3,minmax(90px,1fr)) auto; gap: 8px; align-items: center; }
+.production-recipe-line { display: flex; gap: 8px; align-items: center; }
+.production-recipe-line > input, .production-recipe-line > select { flex: 1; min-width: 0; }
+.production-recipe-line > select:first-child { flex: 1.5; }
+.production-recipe-remove, .production-recipe-editor .mwd-remove { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border-default); border-radius: 50%; background: rgba(255,255,255,.07); color: var(--text-secondary); font-size: 20px; line-height: 1; cursor: pointer; }
+.production-recipe-remove { margin-left: auto; }
+.production-recipe-remove:hover, .production-recipe-editor .mwd-remove:hover { background: rgba(210,91,75,.18); color: #f09a8d; }
 .production-recipe-line input, .production-recipe-line select, .production-recipe-metrics input, .production-recipe-notes textarea { width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--bg-input); color: var(--text-primary); font: inherit; font-size: 12px; }
 .production-recipe-line input:focus, .production-recipe-line select:focus, .production-recipe-metrics input:focus, .production-recipe-notes textarea:focus { outline: none; border-color: var(--accent-gold); }
 .production-recipe-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
@@ -1255,7 +1260,7 @@ button, input, select, textarea { font: inherit; }
 .plan-editor-body .master-error { grid-column: 1 / -1; margin: 0; }
 .plan-editor-modal .equipment-modal-footer { position: sticky; bottom: 0; background: #24211c; }
 @media (max-width: 700px) { .demand-editor-body, .demand-review-summary { grid-template-columns: 1fr; } .demand-method-options { grid-template-columns: 1fr; } .demand-list-card { grid-template-columns: 1fr; gap: 16px; padding: 16px; } .demand-list-actions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); min-width: 0; align-items: center; } .demand-list-facts { grid-template-columns: 1fr; } .demand-editor-modal .equipment-modal-footer { flex-wrap: wrap; } }
-@media (max-width: 700px) { .plan-editor-body { grid-template-columns: 1fr; } .plan-editor-wide { grid-column: auto; } .plan-source-options, .plan-system-summary { grid-template-columns: 1fr; } .plan-design-action { align-items: stretch; flex-direction: column; } .plan-editor-modal .equipment-modal-header, .plan-editor-modal .equipment-modal-footer { padding-left: 16px; padding-right: 16px; } .plan-editor-body { padding: 18px 16px; } .production-recipe-body { padding: 16px; } .production-recipe-facts { grid-template-columns: repeat(2,minmax(0,1fr)); } .production-recipe-line, .production-step-line, .production-fermentation-line { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .production-recipe-line select:first-child { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .plan-editor-body { grid-template-columns: 1fr; } .plan-editor-wide { grid-column: auto; } .plan-source-options, .plan-system-summary { grid-template-columns: 1fr; } .plan-design-action { align-items: stretch; flex-direction: column; } .plan-editor-modal .equipment-modal-header, .plan-editor-modal .equipment-modal-footer { padding-left: 16px; padding-right: 16px; } .plan-editor-body { padding: 18px 16px; } .production-recipe-body { padding: 16px; } .production-recipe-facts { grid-template-columns: repeat(2,minmax(0,1fr)); } .production-recipe-line, .production-step-line, .production-fermentation-line { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .production-recipe-line select:first-child { grid-column: 1 / -1; } }
 .supplier-editor-modal .supplier-status-control label { color: var(--text-secondary); }
 .supplier-editor-modal .equipment-modal-header { background: linear-gradient(90deg, rgba(212,168,83,.12), transparent 64%); border-color: var(--border-subtle); }
 .supplier-editor-modal .equipment-modal-header .modal-title { color: var(--text-primary); font-size: 17px; }
@@ -1845,3 +1850,102 @@ button, input, select, textarea { font: inherit; }
   .recipe-create-tabs { grid-template-columns: 1fr; }
   .recipe-process-grid { grid-template-columns: 1fr 1fr; }
 }
+.mash-execution-modal { width: min(900px, calc(100vw - 32px)); max-height: min(88vh, 920px); display: flex; flex-direction: column; }
+.mash-execution-body { overflow: auto; }
+.mash-checkpoint-list { display: grid; gap: 9px; list-style: none; }
+.mash-checkpoint { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; align-items: start; gap: 12px; padding: 13px; border: 1px solid var(--border-default); border-radius: 9px; background: rgba(18,16,13,.34); }
+.mash-checkpoint.current { border-color: rgba(212,168,83,.55); background: rgba(212,168,83,.07); }
+.mash-checkpoint.done { border-color: rgba(91,154,90,.28); }
+.mash-checkpoint-number { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border-default); border-radius: 50%; color: var(--text-muted); font: 700 11px var(--font-mono); }
+.mash-checkpoint.current .mash-checkpoint-number { border-color: var(--accent-gold); color: var(--accent-gold); }
+.mash-checkpoint.done .mash-checkpoint-number { border-color: var(--success); color: #9bd09a; }
+.mash-checkpoint-main { display: grid; gap: 6px; min-width: 0; }
+.mash-checkpoint-title { font-size: 13px; font-weight: 700; }
+.mash-checkpoint-meta,.mash-checkpoint-timer { color: var(--text-muted); font-size: 11px; }
+.mash-checkpoint-warning { color: #e8ae70; font-size: 11px; }
+.mash-checkpoint-control { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
+.mash-checkpoint-control input { width: min(260px, 100%); min-height: 34px; padding: 7px 9px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-input); color: var(--text-primary); }
+.mash-current-tag { padding: 4px 8px; border-radius: 999px; background: rgba(212,168,83,.12); color: var(--accent-gold); font-size: 10px; white-space: nowrap; }
+@media (max-width: 560px) { .mash-checkpoint { grid-template-columns: 28px minmax(0,1fr); gap: 8px; padding: 10px; } .mash-checkpoint-number { width: 26px; height: 26px; } }
+
+@media (max-width: 700px) { .production-recipe-line > .production-recipe-remove { grid-column: 2; justify-self: end; } }
+
+/* Production planning and batch tasks */
+.plan-editor-modal { width: min(960px, calc(100vw - 32px)); }
+.plan-section-title { display: flex; align-items: center; gap: 10px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
+.plan-section-title b { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(212,168,83,.12); color: var(--accent-gold); font-size: 11px; }
+.plan-editor-body > .plan-section-title:not(:first-child) { padding-top: 14px; border-top: 1px solid var(--border-subtle); margin-top: 4px; }
+.plan-source-options button { padding: 10px 14px; text-align: center; }
+.plan-source-options strong { font-size: 12px; }
+.plan-design-action { padding: 10px 12px; }
+.plan-stock-panel { border-top: 1px solid var(--border-subtle); padding-top: 18px; margin-top: 4px; }
+.plan-stock-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.plan-stock-table { width: 100%; overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.plan-stock-table table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+.plan-stock-table th { padding: 10px 12px; background: rgba(255,255,255,.035); color: var(--text-muted); text-align: left; font-weight: 500; }
+.plan-stock-table td { padding: 11px 12px; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); }
+.plan-stock-table th:not(:first-child), .plan-stock-table td:not(:first-child) { text-align: right; }
+.plan-stock-table td.stock-shortage, .stock-shortage { color: #efad75; }
+.stock-result { display: inline-block; padding: 3px 8px; border-radius: 5px; font-size: 11px; color: #a5c8a0; background: rgba(104,162,95,.12); }
+.stock-result.shortage { color: #efad75; background: rgba(212,168,83,.12); }
+.plan-stock-message { margin-top: 10px; padding: 9px 12px; border-radius: 7px; background: rgba(104,162,95,.07); color: var(--text-secondary); font-size: 12px; }
+.plan-stock-message.shortage { background: rgba(212,168,83,.08); color: #e4c47d; }
+.plan-batch-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: 14px; }
+.plan-batch-card { min-width: 0; padding: 18px; border: 1px solid var(--border-default); border-radius: 12px; background: linear-gradient(135deg,rgba(212,168,83,.055),rgba(255,255,255,.015)); color: var(--text-primary); text-align: left; font: inherit; cursor: pointer; }
+.plan-batch-card:hover { border-color: rgba(212,168,83,.55); }
+.plan-batch-card header, .plan-batch-card footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.plan-batch-card header strong { color: var(--accent-gold); font-size: 12px; }
+.plan-batch-card h3 { margin: 14px 0 10px; font-size: 17px; }
+.plan-batch-card h3 small { margin-left: 8px; color: var(--text-muted); font-size: 12px; font-weight: 400; }
+.plan-batch-facts { display: grid; gap: 5px; color: var(--text-secondary); font-size: 12px; }
+.plan-batch-card footer { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--border-subtle); font-size: 11px; }
+.plan-batch-card footer span { color: var(--text-muted); }
+.plan-batch-card footer b { color: var(--accent-gold); font-weight: 500; white-space: nowrap; }
+.plan-batch-task-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-batch-task-tags span { padding: 5px 8px; border-radius: 5px; background: rgba(255,255,255,.04); color: var(--text-secondary); font-size: 11px; }
+.plan-detail-mask { z-index: 1100; }
+.plan-detail-modal { width: min(920px,calc(100vw - 32px)); }
+.plan-detail-body { display: grid; gap: 18px; }
+.plan-flow { display: flex; align-items: flex-start; gap: 8px; }
+.plan-flow > div { flex: 1; display: grid; justify-items: center; gap: 8px; position: relative; font-size: 11px; color: var(--text-muted); }
+.plan-flow > div:not(:last-child)::after { content: ''; position: absolute; height: 1px; top: 15px; left: calc(50% + 20px); right: calc(-50% + 20px); background: var(--border-default); }
+.plan-flow b { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border-default); border-radius: 50%; font-size: 12px; }
+.plan-flow .current { color: var(--accent-gold); }
+.plan-flow .current b { border-color: var(--accent-gold); background: rgba(212,168,83,.1); }
+.plan-flow .done b { border-color: var(--accent-gold); background: var(--accent-gold); color: #211d16; }
+.plan-detail-status { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: 8px; color: var(--accent-gold); font-size: 13px; }
+.plan-detail-status span { color: var(--text-muted); font-size: 12px; }
+.plan-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.plan-detail-heading { margin: 0 0 12px; font-size: 13px; color: var(--text-primary); }
+.plan-detail-task-list { display: grid; gap: 8px; }
+.plan-detail-task { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--border-subtle); border-radius: 8px; background: rgba(255,255,255,.015); }
+.plan-detail-task strong { display: block; font-size: 13px; }
+.plan-detail-task small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 6px; }
+.plan-detail-task-buttons { display: flex; gap: 8px; }
+.plan-timeline { list-style: none; margin: 0; padding: 0 0 0 6px; }
+.plan-timeline li { display: flex; gap: 14px; position: relative; padding-bottom: 20px; }
+.plan-timeline li:not(:last-child)::before { position: absolute; content: ''; top: 10px; bottom: 0; left: 4px; width: 1px; background: var(--border-default); }
+.plan-timeline-dot { position: relative; width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; background: var(--accent-gold); flex: none; }
+.plan-timeline strong { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.plan-timeline small { display: block; margin-top: 5px; font-size: 11px; color: var(--text-muted); }
+@media(max-width:700px) { .plan-editor-modal, .plan-detail-modal { width: 100%; } .plan-batch-grid { grid-template-columns: 1fr; } .plan-source-options { grid-template-columns: 1fr 1fr; } .plan-detail-status { flex-direction: column; } .plan-detail-task { flex-wrap: wrap; } .plan-batch-card footer { flex-wrap: wrap; } }
+.plan-demand-stock { margin-bottom: 12px; }
+.plan-demand-stock small { display: block; margin: 7px 0; font-size: 11px; color: var(--text-muted); }
+.production-own-batches { display: grid; gap: 16px; }
+.production-own-batch { border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; }
+.production-own-batch > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: rgba(212,168,83,.04); }
+.production-own-batch > header strong { display: block; color: var(--accent-gold); font-size: 12px; }
+.production-own-batch > header span { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; }
+.production-own-task { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px 18px; border: 0; border-top: 1px solid var(--border-subtle); background: transparent; text-align: left; color: var(--text-primary); font: inherit; cursor: pointer; }
+.production-own-task:hover { background: rgba(255,255,255,.025); }
+.production-own-task-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 9px; background: rgba(212,168,83,.12); color: var(--accent-gold); font-size: 15px; }
+.production-own-task-icon.fermentation { background: rgba(113,164,184,.12); color: #96c1d1; }
+.production-own-task-main { flex: 1; min-width: 0; }
+.production-own-task-main strong { display: block; font-size: 14px; }
+.production-own-task-main span { display: block; margin-top: 6px; color: var(--text-muted); font-size: 11px; }
+.production-own-task > b { color: var(--accent-gold); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.plan-detail-task.focused { border-color: rgba(212,168,83,.55); background: rgba(212,168,83,.06); }
+@media(max-width:700px) { .production-own-task { flex-wrap: wrap; gap: 10px; padding: 14px; } .production-own-task > b { width: 100%; text-align: right; } .production-own-batch > header { padding: 14px; } }
+.plan-fermentation-rule { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+.plan-fermentation-rule strong { color: var(--text-secondary); font-weight: 500; }
+.plan-fermentation-rule span { color: var(--accent-gold); }

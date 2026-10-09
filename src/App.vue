@@ -88,7 +88,7 @@
         <TracePage v-else-if="currentPage === 'trace'" />
         <ReportsPage v-else-if="currentPage === 'reports'" />
         <SettingsPage v-else-if="currentPage === 'settings'" :permissions="authContext.permissions" />
-        <SupplierCatalogPage v-else-if="currentPage === 'supplier_catalog'" :permissions="authContext.permissions" @toast="showToast" />
+        <div v-else-if="currentPage === 'supplier_catalog'"><div class="ferm-tabs" style="display:flex;gap:12px;margin-bottom:20px"><button class="btn btn-sm" :class="supplierCatalogTab === 'raw' ? 'btn-primary' : 'btn-outline'" @click="supplierCatalogTab='raw'">酿造原料</button><button class="btn btn-sm" :class="supplierCatalogTab === 'packaging' ? 'btn-primary' : 'btn-outline'" @click="supplierCatalogTab='packaging'">包装材料</button></div><SupplierCatalogPage v-if="supplierCatalogTab === 'raw'" :permissions="authContext.permissions" @toast="showToast" /><PackagingMaterialsPage v-else :supplier="true" /></div>
         <TasksPage v-else-if="currentPage === 'tasks'" @open-recipe-review="openRecipeReview" />
       </section>
     </main>
@@ -99,14 +99,17 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, onUpdated, reactive, ref, watch } from "vue";
+import { computed, defineComponent, h, onMounted, onUnmounted, onUpdated, reactive, ref, watch } from "vue";
 import { brewApi } from "./api";
 import RecipePage from "./components/RecipePage.vue";
+import ProductionPlanDetail from "./components/ProductionPlanDetail.vue";
 import ProductionRecipeEditor from "./components/ProductionRecipeEditor.vue";
 import InventoryProcurementPage from "./components/InventoryProcurementPage.vue";
+import PackagingMaterialsPage from "./components/PackagingMaterialsPage.vue";
 import { calculateRecipe } from "./recipe-calculations";
 import { navSections, pageMeta, roles } from "./data";
 
+const supplierCatalogTab = ref("raw");
 const currentRole = ref("gm");
 const currentPage = ref("dashboard");
 const keyword = ref("");
@@ -510,7 +513,7 @@ const FactoryPage = defineComponent({
         device: item.equipment?.name,
         tank: item.tank?.name,
         owner: item.owner?.name || "-",
-        state: ({ draft: "草稿", submitted: "待审批", approved: "已批准", dispatched: "已下发", in_progress: "执行中", done: "已完成", cancelled: "已取消", terminated: "已终止" })[item.state] || item.state
+        state: ({ draft: "待下发", checked: "待下发", stocking: "原料备货中", pending_approval: "待下发", submitted: "待下发", approved: "待下发", dispatched: "已下发", in_progress: "执行中", done: "已完成", cancelled: "已取消", terminated: "已终止" })[item.state] || item.state
       }));
     },
     stockRows() {
@@ -650,7 +653,7 @@ function demandPackagingSummary(item) {
 }
 
 const ProductionPage = defineComponent({
-  components: { Tabs, DataTable, Workflow, TaskCard, StatusTag, ProductionRecipeEditor },
+  components: { Tabs, DataTable, Workflow, TaskCard, StatusTag, ProductionRecipeEditor, ProductionPlanDetail },
   props: { permissions: { type: Array, default: () => [] } },
   data() {
     return {
@@ -686,6 +689,12 @@ const ProductionPage = defineComponent({
       showPlanRecipeEditor: false,
       planRecipeDesign: null,
       planRecipeDesignSaved: false,
+      planInventory: null,
+      planInventoryLoading: false,
+      planInventoryError: "",
+      planInventoryTimer: null,
+      planInventorySequence: 0,
+      selectedPlanId: null,
       planSaving: false,
       planError: "",
       planAssignees: [],
@@ -864,6 +873,10 @@ const ProductionPage = defineComponent({
         state: ({ open: "待处理", assigned: "已指派", resolved: "待复核", closed: "已关闭" })[item.state] || item.state
       }));
     },
+    planHasShortage() { return this.planInventory && !this.planInventory.ok; },
+    planInventoryKey() {
+      return JSON.stringify([this.planDraft.demand_id, this.planDraft.factory_id, this.planDraft.recipe_version_id, this.planDraft.source_production_batch_id, this.planDraft.planned_volume_l, this.planRecipeDesignSaved ? this.planRecipeDesign : null]);
+    },
     planRows() {
       return this.productionPlans.map(item => ({
         id: item.name,
@@ -881,7 +894,7 @@ const ProductionPage = defineComponent({
         tank: item.tank?.name || "-",
         mash_owner: item.mash_owner?.name || "-",
         fermentation_owner: item.fermentation_owner?.name || "-",
-        state: ({ draft: "草稿", submitted: "待审批", approved: "已批准", dispatched: "已下发", in_progress: "执行中", done: "已完成", cancelled: "已取消", terminated: "已终止" })[item.state] || item.state
+        state: ({ draft: "待下发", checked: "待下发", stocking: "原料备货中", pending_approval: "待下发", submitted: "待下发", approved: "待下发", dispatched: "已下发", in_progress: "执行中", done: "已完成", cancelled: "已取消", terminated: "已终止" })[item.state] || item.state
       }));
     },
     packagingRows() {
@@ -898,6 +911,11 @@ const ProductionPage = defineComponent({
       }));
     }
   },
+  watch: {
+    planInventoryKey() { this.schedulePlanInventory(); },
+    showPlanForm(visible) { if (visible) this.schedulePlanInventory(); else { clearTimeout(this.planInventoryTimer); this.planInventorySequence++; } }
+  },
+  beforeUnmount() { clearTimeout(this.planInventoryTimer); this.planInventorySequence++; },
   mounted() {
     this.tab = !this.canReadDemands && !this.canReadPlans && this.canExecuteProduction
       ? "fermentation"
@@ -1090,6 +1108,27 @@ const ProductionPage = defineComponent({
         this.demandSaving = false;
       }
     },
+    schedulePlanInventory() {
+      clearTimeout(this.planInventoryTimer);
+      this.planInventorySequence++;
+      this.planInventory = null;
+      this.planInventoryError = "";
+      this.planInventoryLoading = false;
+      if (!this.showPlanForm || !this.planDraft.recipe_version_id || !this.planDraft.factory_id || !(Number(this.planDraft.planned_volume_l) > 0)) return;
+      this.planInventoryLoading = true;
+      this.planInventoryTimer = setTimeout(() => this.checkPlanInventory(), 250);
+    },
+    async checkPlanInventory() {
+      const sequence = ++this.planInventorySequence;
+      this.planInventoryLoading = true;
+      this.planInventoryError = "";
+      try {
+        const result = await brewApi.previewPlanInventory({ demand_id: this.planDraft.demand_id || undefined, factory_id: Number(this.planDraft.factory_id), recipe_version_id: Number(this.planDraft.recipe_version_id), source_production_batch_id: this.planDraft.process_source_type === "production" ? Number(this.planDraft.source_production_batch_id) : undefined, planned_volume_l: Number(this.planDraft.planned_volume_l), production_design: this.planRecipeDesignSaved ? this.planRecipeDesign : undefined });
+        if (sequence === this.planInventorySequence) this.planInventory = result;
+      } catch (cause) { if (sequence === this.planInventorySequence) this.planInventoryError = cause.message || "库存对比失败，请重试"; }
+      finally { if (sequence === this.planInventorySequence) this.planInventoryLoading = false; }
+    },
+    stockNumber(value) { return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 }); },
     openPlan() {
       this.planDraft = { demand_id: "", product_tmpl_id: "", process_source_type: "base", source_production_batch_id: "", factory_id: "", recipe_version_id: "", equipment_id: "", tank_id: "", planned_volume_l: "", planned_start: "", planned_end: "", owner_id: "", mash_owner_id: "", fermentation_owner_id: "" };
       this.planAssignees = [];
@@ -1157,6 +1196,7 @@ const ProductionPage = defineComponent({
       this.planAssignees = [];
     },
     async choosePlanRecipe() {
+      this.planRecipeDesign = null; this.planRecipeDesignSaved = false;
       const recipe = this.planRecipes.find(item => String(item.active_version_id) === String(this.planDraft.recipe_version_id));
       this.planDraft.equipment_id = recipe?.equipment?.id || "";
       this.planDraft.factory_id = this.equipment.find(item => String(item.id) === String(this.planDraft.equipment_id))?.brew_factory_id?.id || "";
@@ -1166,6 +1206,7 @@ const ProductionPage = defineComponent({
       await this.loadPlanAssignees(this.planDraft.factory_id);
     },
     async choosePlanProductionRun() {
+      this.planRecipeDesign = null; this.planRecipeDesignSaved = false;
       const batch = this.planSourceRuns.find(item => String(item.id) === String(this.planDraft.source_production_batch_id));
       this.planDraft.recipe_version_id = batch?.source_version?.id || "";
       this.planDraft.equipment_id = batch?.brew_system?.id || batch?.equipment?.id || "";
@@ -1222,7 +1263,8 @@ const ProductionPage = defineComponent({
           productionDesign.mash.sparge_mode = "auto";
           productionDesign.mash.sparge_water_liters = [...calculateRecipe(productionDesign).spargeWaters];
         }
-        await brewApi.createProductionPlan({
+        if (!this.planInventory || this.planInventoryLoading || this.planInventoryError) throw new Error("请等待库存对比完成后再保存。 ");
+        const created = await brewApi.createProductionPlan({
           demand_id: this.planDraft.demand_id ? Number(this.planDraft.demand_id) : undefined,
           factory_id: Number(this.planDraft.factory_id),
           recipe_version_id: Number(this.planDraft.recipe_version_id),
@@ -1230,14 +1272,16 @@ const ProductionPage = defineComponent({
           equipment_id: Number(this.planDraft.equipment_id),
           tank_id: Number(this.planDraft.tank_id),
           planned_volume_l: Number(this.planDraft.planned_volume_l),
-          planned_start: this.planDraft.planned_start,
-          planned_end: this.planDraft.planned_end,
+          planned_start: new Date(this.planDraft.planned_start).toISOString(),
+          planned_end: new Date(this.planDraft.planned_end).toISOString(),
           owner_id: this.planDraft.owner_id ? Number(this.planDraft.owner_id) : undefined,
           mash_owner_id: Number(this.planDraft.mash_owner_id),
           fermentation_owner_id: Number(this.planDraft.fermentation_owner_id),
-          production_design: productionDesign
+          production_design: productionDesign,
+          submit_stock_request: Boolean(this.planHasShortage)
         });
         this.showPlanForm = false;
+        this.selectedPlanId = created.id;
         this.planDraft = { demand_id: "", product_tmpl_id: "", process_source_type: "base", source_production_batch_id: "", factory_id: "", recipe_version_id: "", equipment_id: "", tank_id: "", planned_volume_l: "", planned_start: "", planned_end: "", owner_id: "", mash_owner_id: "", fermentation_owner_id: "" };
         this.planRecipeDesign = null;
         this.planRecipeDesignSaved = false;
@@ -1301,36 +1345,42 @@ const ProductionPage = defineComponent({
       <div v-if="showPlanForm" class="equipment-modal-mask" @click.self="closePlan">
         <form class="equipment-modal plan-editor-modal" @submit.prevent="submitPlan">
           <div class="equipment-modal-header">
-            <div><div class="modal-title">新建生产计划</div><div class="modal-subtitle">按产品需求确定产量，再选择基础工艺或历史生产批次工艺</div></div>
+            <div><div class="modal-title">新建生产计划</div></div>
             <button class="equipment-close" type="button" aria-label="关闭" @click="closePlan">×</button>
           </div>
           <div class="equipment-modal-body plan-editor-body">
-            <label class="plan-editor-wide"><span>来源产品需求</span><select v-model="planDraft.demand_id" @change="choosePlanDemand"><option value="">自定义生产 / 试生产</option><option v-for="item in confirmedDemands" :key="item.id" :value="item.id">{{ item.name }} · {{ item.product?.name }} · 需求 {{ item.requested_volume_l }} L</option></select><small>选择已确认需求会自动带入啤酒产品和需求产量；不选择则可创建备货或试生产计划。</small></label>
+            <div class="plan-section-title plan-editor-wide"><b>01</b> 需求与工艺</div>
+            <label class="plan-editor-wide"><span>来源产品需求</span><select v-model="planDraft.demand_id" @change="choosePlanDemand"><option value="">自定义生产 / 试生产</option><option v-for="item in confirmedDemands" :key="item.id" :value="item.id">{{ item.name }} · {{ item.product?.name }} · 需求 {{ item.requested_volume_l }} L</option></select></label>
             <label v-if="!planDraft.demand_id" class="plan-editor-wide"><span><i>*</i>啤酒产品</span><select v-model="planDraft.product_tmpl_id" required @change="choosePlanProduct"><option value="">请选择啤酒产品</option><option v-for="item in products.filter(row => row.brew_item_type === 'finished_product')" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-            <div v-else class="plan-selected-product plan-editor-wide"><span>啤酒产品</span><strong>{{ selectedPlanProduct?.name || '—' }}</strong><small>产品由来源需求带入</small></div>
             <div class="plan-recipe-picker plan-editor-wide">
               <span>选择配方来源 <i>*</i></span>
-              <div class="plan-source-options"><button type="button" :class="{ selected: planDraft.process_source_type === 'base' }" @click="planDraft.process_source_type = 'base'; choosePlanProcessSource()"><strong>基础工艺</strong><small>使用当前已启用的配方版本</small></button><button type="button" :class="{ selected: planDraft.process_source_type === 'production' }" @click="planDraft.process_source_type = 'production'; choosePlanProcessSource()"><strong>历史生产工艺</strong><small>沿用已进罐或已完成批次的工艺快照</small></button></div>
+              <div class="plan-source-options"><button type="button" :class="{ selected: planDraft.process_source_type === 'base' }" @click="planDraft.process_source_type = 'base'; choosePlanProcessSource()"><strong>基础工艺</strong></button><button type="button" :class="{ selected: planDraft.process_source_type === 'production' }" @click="planDraft.process_source_type = 'production'; choosePlanProcessSource()"><strong>历史生产工艺</strong></button></div>
             </div>
             <label v-if="planDraft.process_source_type === 'base'" class="plan-editor-wide"><span><i>*</i>基础工艺版本</span><select v-model="planDraft.recipe_version_id" required :disabled="!selectedPlanProduct" @change="choosePlanRecipe"><option value="">{{ selectedPlanProduct ? (planRecipes.length ? '请选择与该产品关联的基础工艺' : '该产品暂无可用基础工艺') : '请先选择啤酒产品' }}</option><option v-for="item in planRecipes" :key="item.active_version_id" :value="item.active_version_id">{{ item.active_version_label }} · {{ item.equipment?.name || '未设置酿造系统' }}</option></select></label>
             <label v-else class="plan-editor-wide"><span><i>*</i>历史生产批次工艺</span><select v-model="planDraft.source_production_batch_id" required :disabled="!selectedPlanProduct" @change="choosePlanProductionRun"><option value="">{{ selectedPlanProduct ? (planSourceRuns.length ? '请选择历史生产批次' : '该产品暂无可复用的生产批次工艺') : '请先选择啤酒产品' }}</option><option v-for="item in planSourceRuns" :key="item.id" :value="item.id">{{ item.name }} · {{ item.source_version?.label }} · {{ item.brew_system?.name || item.equipment?.name || '酿造系统未记录' }} · {{ item.actual_volume_l || item.planned_volume_l }} L</option></select></label>
-            <div v-if="selectedPlanSystem" class="plan-system-summary plan-editor-wide"><div><span>配方绑定的酿造系统</span><strong>{{ selectedPlanSystem.name }}</strong></div><div><span>所属厂区</span><strong>{{ selectedPlanSystem.factory_name || '未配置' }}</strong></div><div><span>工艺来源</span><strong>{{ planDraft.process_source_type === 'base' ? '基础工艺版本' : '历史批次工艺快照' }}</strong></div><div><span>{{ planDraft.process_source_type === 'base' ? '配方设计产量' : '参考批次产量' }}</span><strong>{{ selectedPlanSystem.reference_volume_l ? selectedPlanSystem.reference_volume_l + ' L' : '—' }}</strong></div></div>
-            <div v-else class="plan-recipe-hint plan-editor-wide">先选配方。计划会自动带出配方绑定的酿造系统；原料用量按计划产量缩放，糖化与发酵步骤保留在工艺快照中。选择历史批次时，会按该批次的留存工艺和用料记录换算。</div>
-            <div v-if="selectedPlanSystem" class="plan-design-action plan-editor-wide"><div><strong>生产配方设计</strong><small>{{ planRecipeDesignSaved ? '已保存本计划专属的生产版工艺；基础工艺保持不变。' : '可查看完整配方、糖化和发酵设计，并按本次生产需要调整。' }}</small></div><button class="btn btn-sm btn-outline" type="button" :disabled="!Number(planDraft.planned_volume_l)" @click="openPlanRecipeEditor">{{ planRecipeDesignSaved ? '查看 / 修改生产版' : '查看 / 调整配方设计' }}</button></div>
+            <div v-if="selectedPlanSystem" class="plan-design-action plan-editor-wide"><div><strong>{{ selectedPlanSystem.name }}</strong><small>{{ selectedPlanSystem.factory_name }} · {{ planRecipeDesignSaved ? '已调整生产配方' : '使用来源配方' }}</small></div><button class="btn btn-sm btn-outline" type="button" :disabled="!Number(planDraft.planned_volume_l)" @click="openPlanRecipeEditor">查看 / 调整配方</button></div>
+            <div class="plan-section-title plan-editor-wide"><b>02</b> 生产安排</div>
             <label><span><i>*</i>目标发酵罐</span><select v-model="planDraft.tank_id" required :disabled="!planDraft.factory_id"><option value="">{{ planDraft.factory_id ? '选择满足计划产量的发酵罐' : '先选择配方以确定厂区' }}</option><option v-for="item in filteredPlanTanks" :key="item.id" :value="item.id">{{ item.name }} · {{ item.capacity_l }} L</option></select></label>
             <label><span><i>*</i>计划产量（L）</span><input v-model.number="planDraft.planned_volume_l" type="number" min="0.001" step="0.001" required placeholder="输入本次实际计划酿造量" @input="ensurePlanTankCapacity"></label>
             <label><span><i>*</i>计划投料 / 开始时间</span><input v-model="planDraft.planned_start" type="datetime-local" required></label>
             <label><span><i>*</i>预计结束时间</span><input v-model="planDraft.planned_end" type="datetime-local" required></label>
             <label><span><i>*</i>糖化负责人</span><select v-model="planDraft.mash_owner_id" required :disabled="!planDraft.factory_id || !planAssignees.length"><option value="">{{ !planDraft.factory_id ? '先确定酿造系统和厂区' : (planAssignees.length ? '选择糖化操作人员' : '本厂区暂无可分配的操作人员') }}</option><option v-for="person in planAssignees" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
             <label><span><i>*</i>发酵负责人</span><select v-model="planDraft.fermentation_owner_id" required :disabled="!planDraft.factory_id || !planAssignees.length"><option value="">{{ !planDraft.factory_id ? '先确定酿造系统和厂区' : (planAssignees.length ? '选择发酵操作人员' : '本厂区暂无可分配的操作人员') }}</option><option v-for="person in planAssignees" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
-            <div class="plan-recipe-hint plan-editor-wide">计划下发后分别生成糖化、发酵执行待办，并指派给对应负责人；备料待办仍交由仓库角色处理。</div>
+            <section class="plan-stock-panel plan-editor-wide">
+              <header><div class="plan-section-title"><b>03</b> 生产需求与库存对比</div><button v-if="planDraft.recipe_version_id && planDraft.planned_volume_l" class="btn btn-xs btn-outline" type="button" :disabled="planInventoryLoading" @click="checkPlanInventory">刷新库存</button></header>
+              <div v-if="planInventoryLoading" class="empty">正在核对原料库存…</div>
+              <div v-else-if="planInventoryError" class="master-error">{{ planInventoryError }}</div>
+              <div v-else-if="!planInventory" class="empty">选择配方和计划产量后，自动核对所需原料</div>
+              <template v-else><div v-if="planInventory.demand_inventory" class="plan-demand-stock"><div class="plan-stock-table"><table><thead><tr><th>产品</th><th>需求酒液</th><th>可用成品</th><th>待生产缺口</th><th>交付日期</th></tr></thead><tbody><tr><td>{{ planInventory.demand_inventory.product }}</td><td>{{ stockNumber(planInventory.demand_inventory.required_l) }} L</td><td>{{ stockNumber(planInventory.demand_inventory.available_l) }} L</td><td>{{ stockNumber(planInventory.demand_inventory.shortage_l) }} L</td><td>{{ planInventory.demand_inventory.delivery_date || '—' }}</td></tr></tbody></table></div><small v-if="planInventory.demand_inventory.unknown_packaging">部分历史库存缺少包装信息，未计入可用酒液。</small></div><div class="plan-stock-table"><table><thead><tr><th>原料</th><th>本次需要</th><th>可用库存</th><th>缺口</th><th>状态</th></tr></thead><tbody><tr v-for="row in planInventory.materials" :key="row.product.id"><td>{{ row.product.name }}</td><td>{{ stockNumber(row.required) }} {{ row.uom }}</td><td>{{ stockNumber(row.available) }} {{ row.uom }}</td><td :class="{ 'stock-shortage': row.shortage > 0 }">{{ row.shortage > 0 ? stockNumber(row.shortage) + ' ' + row.uom : '—' }}</td><td><span class="stock-result" :class="{ shortage: row.shortage > 0 }">{{ row.shortage > 0 ? '待备货' : '充足' }}</span></td></tr></tbody></table></div><div class="plan-stock-message" :class="{ shortage: planHasShortage }">{{ planHasShortage ? '原料不足，提交后生成备货需求，计划进入备货中。' : '原料充足，保存后可直接下发。' }}</div></template>
+            </section>
             <div v-if="planError" class="master-error plan-editor-wide">{{ planError }}</div>
           </div>
-          <div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="closePlan">取消</button><button class="btn btn-primary" type="submit" :disabled="planSaving || !planDraft.equipment_id">{{ planSaving ? '保存中…' : '保存生产计划' }}</button></div>
+          <div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="closePlan">取消</button><button class="btn btn-primary" type="submit" :disabled="planSaving || !planDraft.equipment_id || planInventoryLoading || !planInventory || !!planInventoryError">{{ planSaving ? '提交中…' : planHasShortage ? '保存并提交备货需求' : '保存生产计划' }}</button></div>
         </form>
       </div>
       <ProductionRecipeEditor :visible="showPlanRecipeEditor" :source-type="planDraft.process_source_type" :recipe-version-id="planDraft.recipe_version_id" :production-batch-id="planDraft.source_production_batch_id" :equipment-id="planDraft.equipment_id" :planned-volume="Number(planDraft.planned_volume_l)" :product-name="selectedPlanProduct?.name || ''" @close="showPlanRecipeEditor = false" @save="savePlanRecipeDesign" />
-      <div class="panel-body no-padding"><DataTable :columns="planColumns" :rows="planRows" /></div>
+      <div class="panel-body plan-batch-grid"><button v-for="plan in productionPlans" :key="plan.id" class="plan-batch-card" type="button" @click="selectedPlanId = plan.id"><header><strong>{{ plan.batch?.name || plan.name }}</strong><StatusTag :text="planRows.find(row => row.id === plan.name)?.state || plan.state" /></header><h3>{{ plan.product?.name }}</h3><div class="plan-batch-facts"><span>{{ plan.planned_volume_l }} L · {{ plan.tank?.name }}</span><span>{{ plan.planned_start?.replace('T',' ').slice(0,16) }}</span></div><footer><span>糖化 {{ plan.mash_owner?.name || '待分配' }} · 发酵 {{ plan.fermentation_owner?.name || '待分配' }}</span><b>任务与流程 →</b></footer></button><div v-if="!productionPlans.length" class="empty">暂无生产计划</div></div>
+      <ProductionPlanDetail :plan-id="selectedPlanId" @close="selectedPlanId = null" @changed="loadExecution" />
     </div>
     <div v-else-if="tab === 'mash'" class="procurement-grid">
       <div class="panel"><div class="panel-header"><div class="panel-title">领料与退料</div><button class="btn btn-sm btn-secondary" @click="loadExecution">刷新</button></div><div class="panel-body no-padding"><DataTable :columns="[{key:'name',label:'领料单'},{key:'plan',label:'生产计划'},{key:'factory',label:'厂区'},{key:'items',label:'物料项'},{key:'state',label:'状态',type:'status'}]" :rows="materialRows" /></div></div>
@@ -1747,7 +1797,7 @@ const AccountSettings = defineComponent({
 });
 
 const SettingsPage = defineComponent({
-  components: { AccountSettings },
+  components: { AccountSettings, PackagingMaterialsPage },
   props: { permissions: { type: Array, default: () => [] } },
   template: `
     <div class="master-workspace">
@@ -1761,7 +1811,7 @@ const SettingsPage = defineComponent({
         >{{ item.label }}</button>
       </aside>
       <div class="panel master-panel">
-        <div v-if="selected !== 'accounts'" class="panel-header">
+        <div v-if="!['accounts','packaging_materials'].includes(selected)" class="panel-header">
           <div>
             <div class="panel-title">{{ currentResource.label }}</div>
             <div class="panel-subtitle">{{ currentResource.desc }}</div>
@@ -1771,7 +1821,7 @@ const SettingsPage = defineComponent({
             <button v-if="canCreate && !(selected === 'equipment' && equipmentFactory)" class="btn btn-sm btn-primary" type="button" @click.prevent.stop="isCategoryResource(selected) ? startCategoryCreate() : startCreate()">{{ isCategoryResource(selected) && materialCategoryParent ? '新增小类' : '新增' }}</button>
           </div>
         </div>
-        <AccountSettings v-if="selected === 'accounts'" :permissions="permissions" />
+        <AccountSettings v-if="selected === 'accounts'" :permissions="permissions" /><PackagingMaterialsPage v-else-if="selected === 'packaging_materials'" style="padding:20px" />
         <template v-else>
         <div v-if="error" class="master-error">{{ error }}</div>
         <div v-if="categoryNotice" class="master-notice">{{ categoryNotice }}</div>
@@ -1898,7 +1948,7 @@ const SettingsPage = defineComponent({
               <div class="auto-code-field"><span>系统编码</span><strong>{{ draft.code || '保存时自动生成' }}</strong><small>由系统自动生成，不可编辑</small></div>
               <label v-if="!materialCategoryParent && !isBeerCategory(selected)"><span><i>*</i>原料大类</span><select v-model="draft.material_group" required><option value="">请选择大类</option><option v-for="option in materialGroupOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
               <div v-else-if="materialCategoryParent" class="material-category-parent"><span>所属大类</span><strong>{{ materialCategoryParent.name }}</strong></div>
-              <label><span>排序</span><input v-model.number="draft.sequence" type="number" min="0" step="1"></label>
+              <label v-if="!isBeerCategory(selected) && materialCategoryParent?.material_group === 'packaging'"><span>包装表单类型</span><select v-model="draft.brew_packaging_type" required><option value="">请选择</option><option v-for="[code,label] in [['bottle','玻璃瓶'],['can','易拉罐'],['keg','桶'],['cap','瓶盖'],['can_lid','罐盖'],['keg_seal','桶盖 / 封签'],['label','标签'],['carton','纸箱 / 礼盒'],['divider','隔板 / 纸托'],['film','缠绕膜'],['strap','打包带']]" :key="code" :value="code">{{ label }}</option></select></label><label><span>排序</span><input v-model.number="draft.sequence" type="number" min="0" step="1"></label>
             </div>
             <div class="equipment-modal-footer">
               <button class="btn btn-secondary" type="button" @click="creating = false">取消</button>
@@ -2143,6 +2193,7 @@ const SettingsPage = defineComponent({
     const commonFields = [{ key: "name", label: "名称" }];
     const factoryField = { key: "brew_factory_id", label: "所属厂区", type: "select", options: "factories" };
     const resources = [
+      { code: "packaging_materials", label: "包装材料", desc: "包装材料与供应商商品", fields: [] },
       { code: "factories", label: "厂区", desc: "企业内厂区、编码和地址", fields: [...commonFields, { key: "code", label: "厂区编码" }, { key: "address", label: "地址", required: false }] },
       { code: "equipment", label: "设备", desc: "生产设备容量、技术参数与运行状态", fields: [...commonFields, factoryField, { key: "brew_equipment_type", label: "设备类型", type: "select", values: [["mash","糖化"],["fermentation","发酵"],["bright","清酒"],["packaging","包装"],["centrifuge","离心"],["cleaning","清洗"],["other","其他"]] }, { key: "brew_capacity_l", label: "容量(L)", type: "number" }] },
       { code: "tanks", label: "罐体", desc: "发酵罐、清酒罐和清洗状态", fields: [...commonFields, { ...factoryField, key: "factory_id" }, { key: "tank_type", label: "罐体类型", type: "select", values: [["fermentation","发酵罐"],["bright","清酒罐"]] }, { key: "capacity_l", label: "容量(L)", type: "number" }] },
@@ -2272,7 +2323,7 @@ const SettingsPage = defineComponent({
       error.value = "";
       try {
         const current = currentResource.value;
-        if (current.code === "accounts") return;
+        if (["accounts","packaging_materials"].includes(current.code)) return;
         if (current.code === "users") {
           items.value = await brewApi.listAdminUsers({ page_size: 100 });
           accountRoles.value = await brewApi.listAdminRoles();
@@ -2382,7 +2433,7 @@ const SettingsPage = defineComponent({
         editingItem.value = item; creating.value = true; error.value = ""; return;
       }
       if (isCategoryResource(currentResource.value.code)) {
-        draft.value = { name: item.name || "", code: item.code || "", ...(isBeerCategory(currentResource.value.code) ? {} : { material_group: item.material_group || "" }), parent_id: item.parent_id?.id || item.parent_id || "", sequence: item.sequence || 10, version: item.version };
+        draft.value = { name: item.name || "", code: item.code || "", ...(isBeerCategory(currentResource.value.code) ? {} : { material_group: item.material_group || "", brew_packaging_type: item.brew_packaging_type || "" }), parent_id: item.parent_id?.id || item.parent_id || "", sequence: item.sequence || 10, version: item.version };
         editingItem.value = item;
         creating.value = true;
         error.value = "";
@@ -2921,7 +2972,7 @@ const SupplierCatalogPage = defineComponent({
     }
     async function load() {
       loading.value = true; listError.value = "";
-      try { [materials.value, categories.value] = await Promise.all([brewApi.listMaster("materials", { page_size: 100, active: true }), brewApi.listMaster("material-categories", { page_size: 200, active: true })]); }
+      try { [materials.value, categories.value] = await Promise.all([brewApi.listMaster("materials", { page_size: 100, active: true }), brewApi.listMaster("material-categories", { page_size: 200, active: true })]); materials.value = materials.value.filter(item => item.brew_item_type === "raw_material"); }
       catch (cause) { listError.value = cause.message || "商品加载失败。"; }
       finally { loading.value = false; }
     }
@@ -2961,7 +3012,7 @@ const SupplierCatalogPage = defineComponent({
 });
 
 const TasksPage = defineComponent({
-  components: { StatCard, TaskCard, StatusTag },
+  components: { StatCard, TaskCard, StatusTag, ProductionPlanDetail },
   emits: ["open-recipe-review"],
   setup(_props, { emit }) {
     const tasks = ref([]);
@@ -2972,6 +3023,11 @@ const TasksPage = defineComponent({
     const reviewReason = ref("");
     const reviewError = ref("");
     const reviewSaving = ref(false);
+    const executionTask = ref(null);
+    const executionError = ref("");
+    const executionSaving = ref(false);
+    const executionValues = ref({});
+    const checkpointNow = ref(Date.now());
     const openTasks = computed(() => tasks.value.filter(task => !["done", "cancelled"].includes(task.state)));
     const finishedTasks = computed(() => tasks.value.filter(task => ["done", "cancelled"].includes(task.state)));
     const taskFilter = ref("pending");
@@ -2982,6 +3038,17 @@ const TasksPage = defineComponent({
       if (taskFilter.value === "done") return finishedTasks.value;
       return tasks.value;
     });
+    const selectedBatchPlan = ref(null);
+    const selectedProductionTask = ref(null);
+    const batchTaskGroups = computed(() => {
+      const groups = new Map();
+      for (const task of visibleTasks.value.filter(item => item.target_model === 'brew.production.plan' && ['mashing','fermentation','material_preparation'].includes(item.task_type))) {
+        const group = groups.get(task.target_id) || { planId: task.target_id, name: task.batch?.name || task.plan?.name || task.name, product: task.plan?.product, volume: task.plan?.planned_volume_l, state: task.plan?.state, tasks: [] };
+        group.tasks.push(task); groups.set(task.target_id, group);
+      }
+      return [...groups.values()];
+    });
+    const otherTasks = computed(() => visibleTasks.value.filter(item => item.target_model !== 'brew.production.plan' || !['mashing','fermentation','material_preparation'].includes(item.task_type)));
     function approvalTask(item) {
       return {
         id: 'approval-' + item.id,
@@ -3015,6 +3082,7 @@ const TasksPage = defineComponent({
       finally { loading.value = false; }
     }
     function stateLabel(task) {
+      if (task.target_model === 'brew.production.plan' && ['mashing','fermentation'].includes(task.task_type) && ['pending','claimed'].includes(task.state)) return '待执行';
       if (task.approval_id) return ({ pending: '待审批', done: task.approval_state === 'returned' ? '已退回' : '已同意' })[task.state] || task.state;
       if (task.state === "done" && ["recipe_review", "demand_review"].includes(task.task_type) && task.last_comment?.startsWith("退回修改：")) return "已退回修改";
       if (task.state === "pending" && task.task_type === "recipe_revision") return "待修改";
@@ -3022,6 +3090,46 @@ const TasksPage = defineComponent({
     }
     function taskTypeLabel(task) { return ({ recipe_review: "配方审核", recipe_revision: "配方修改", demand_review: "产品需求确认", mashing: "糖化执行", fermentation: "发酵执行", material_preparation: "备料" })[task.task_type] || task.task_type; }
     function taskComment(task) { return (task.last_comment || "").replace(/^(退回修改：|审核通过：)/, ""); }
+    function checkpointCompletedTime(value) {
+      if (!value) return '';
+      const raw = /[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`;
+      const date = new Date(raw);
+      return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : '';
+    }
+    function checkpointDate(node, checkpoints) {
+      if (!node?.timer_from || node.due_after_min === undefined) return "";
+      const anchor = checkpoints.find(item => item.code === node.timer_from);
+      if (!anchor?.completed_at) return "等待计时开始";
+      const raw = anchor.completed_at;
+      const start = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(raw) ? raw : `${raw}Z`);
+      return Number.isFinite(start) ? new Date(start + Number(node.due_after_min) * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "等待计时开始";
+    }
+    function openMashExecution(task) { executionError.value = ""; executionValues.value = {}; executionTask.value = task; }
+    async function confirmMashCheckpoint(node, value = "") {
+      if (!executionTask.value) return;
+      executionError.value = "";
+      if (node.input_mode === "number" && (value === "" || !Number.isFinite(Number(value)))) { executionError.value = "请输入有效数字后再确认。"; return; }
+      executionSaving.value = true;
+      try {
+        const updated = await brewApi.taskAction(executionTask.value.id, "checkpoint", { version: executionTask.value.version, checkpoint_key: node.code, value });
+        executionTask.value = updated;
+        const index = tasks.value.findIndex(item => item.id === updated.id);
+        if (index >= 0) tasks.value[index] = updated;
+        executionValues.value[node.code] = "";
+      } catch (cause) {
+        executionError.value = cause.message || "节点确认失败。";
+        try { await load(); executionTask.value = tasks.value.find(item => item.id === executionTask.value?.id) || executionTask.value; } catch (_) {}
+      } finally { executionSaving.value = false; }
+    }
+    async function completeMashExecution() {
+      if (!executionTask.value) return;
+      executionSaving.value = true; executionError.value = "";
+      try {
+        await brewApi.taskAction(executionTask.value.id, "submit", { version: executionTask.value.version, comment: "糖化执行节点已全部确认" });
+        executionTask.value = null; await load();
+      } catch (cause) { executionError.value = cause.message || "糖化任务完成失败。"; }
+      finally { executionSaving.value = false; }
+    }
     async function resolveApproval(task, action) {
       let comment = '';
       if (action === 'return') {
@@ -3050,8 +3158,10 @@ const TasksPage = defineComponent({
       } catch (cause) { reviewError.value = cause.message || "处理需求失败。"; }
       finally { reviewSaving.value = false; }
     }
-    onMounted(load);
-    return { tasks, openTasks, finishedTasks, taskFilter, taskFilterLabels, visibleTasks, loading, error, reviewDemand, reviewReason, reviewError, reviewSaving, load, stateLabel, taskTypeLabel, taskComment, demandPackagingSummary, openDemandReview, resolveDemand, resolveApproval, openRecipeReview: (id) => emit("open-recipe-review", id) };
+    let checkpointTicker;
+    onMounted(() => { load(); checkpointTicker = window.setInterval(() => { checkpointNow.value = Date.now(); }, 15000); });
+    onUnmounted(() => window.clearInterval(checkpointTicker));
+    return { selectedProductionTask, selectedBatchPlan, batchTaskGroups, otherTasks, tasks, openTasks, finishedTasks, taskFilter, taskFilterLabels, visibleTasks, loading, error, reviewDemand, reviewReason, reviewError, reviewSaving, executionTask, executionError, executionSaving, executionValues, checkpointNow, checkpointDate, checkpointCompletedTime, openMashExecution, confirmMashCheckpoint, completeMashExecution, load, stateLabel, taskTypeLabel, taskComment, demandPackagingSummary, openDemandReview, resolveDemand, resolveApproval, openRecipeReview: (id) => emit("open-recipe-review", id) };
   },
   template: `
     <div class="stats-grid">
@@ -3060,8 +3170,11 @@ const TasksPage = defineComponent({
       <button class="stat-card task-stat-card" :class="{ active: taskFilter === 'done' }" @click="taskFilter = 'done'"><div class="stat-head"><div class="stat-label">已完成</div><div class="mono">●</div></div><div class="stat-value">{{ finishedTasks.length }}</div><div class="stat-change up">含已退回审核记录</div></button>
       <button class="stat-card task-stat-card" :class="{ active: taskFilter === 'all' }" @click="taskFilter = 'all'"><div class="stat-head"><div class="stat-label">全部任务</div><div class="mono">●</div></div><div class="stat-value">{{ tasks.length }}</div><div class="stat-change up">角色与本人范围</div></button>
     </div>
-    <div class="panel"><div class="panel-header"><div class="panel-title">{{ taskFilterLabels[taskFilter] }}</div><button class="btn btn-sm btn-secondary" @click="load">刷新</button></div><div class="panel-body task-list"><div v-if="loading" class="empty">正在加载...</div><div v-else-if="error" class="master-error">{{ error }}</div><div v-for="task in visibleTasks" v-else :key="task.id" class="task-card task-card-rich"><div class="task-kind-icon" :class="['recipe_review','recipe_revision'].includes(task.task_type) ? 'recipe-review-icon' : 'generic-task-icon'"><svg v-if="['recipe_review','recipe_revision'].includes(task.task_type)" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1-2-2Z"/><path d="M14 3.75v4h4M8.5 12h7M8.5 15.5h5M8.5 8.5h2"/></svg><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5zM8 9h8M8 12h8M8 15h5"/></svg></div><div class="task-card-content"><div class="task-title">{{ task.name }}</div><div class="task-meta"><span class="task-type-pill" :class="{ recipe: ['recipe_review','recipe_revision'].includes(task.task_type) }">{{ taskTypeLabel(task) }}</span><span v-if="task.due_at">截止 {{ task.due_at.replace('T',' ').slice(0,16) }}</span><span v-if="task.assignee?.name">处理人 {{ task.assignee.name }}</span></div><div v-if="task.last_comment" class="task-review-note"><strong>{{ task.task_type === 'recipe_revision' || (task.state === 'done' && task.last_comment.startsWith('退回修改：')) ? '退回意见' : '处理备注' }}</strong><span>{{ taskComment(task) }}</span></div></div><div class="task-card-actions"><StatusTag :text="stateLabel(task)" /><button v-if="task.task_type === 'recipe_review' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方并审核</button><button v-else-if="task.task_type === 'recipe_review'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看审核流程</button><button v-else-if="task.task_type === 'recipe_revision' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">修改配方并重新提交</button><button v-else-if="task.task_type === 'recipe_revision'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方版本</button><button v-else-if="task.task_type === 'demand_review'" class="btn btn-xs btn-outline" @click="openDemandReview(task.target_id)">{{ ['done','cancelled'].includes(task.state) ? '查看需求' : '查看并确认需求' }}</button><template v-else-if="task.approval_id && task.state === 'pending'"><button class="btn btn-xs btn-outline" @click="resolveApproval(task, 'return')">退回</button><button class="btn btn-xs btn-primary" @click="resolveApproval(task, 'approve')">通过</button></template></div></div><div v-if="!loading && !error && !visibleTasks.length" class="empty">{{ taskFilter === 'pending' ? '当前角色暂无待办' : taskFilter === 'urgent' ? '当前没有紧急任务' : taskFilter === 'done' ? '暂无已完成任务' : '暂无任务记录' }}</div></div></div>
+    <section v-if="batchTaskGroups.length" class="panel"><div class="panel-header"><div class="panel-title">我的生产任务</div><button class="btn btn-sm btn-secondary" @click="load">刷新</button></div><div class="panel-body production-own-batches"><article v-for="group in batchTaskGroups" :key="group.planId" class="production-own-batch"><header><div><strong>{{ group.name }}</strong><span>{{ group.product }} · {{ group.volume }} L</span></div><button class="btn btn-xs btn-outline" @click="selectedProductionTask = null; selectedBatchPlan = group.planId">查看批次流程</button></header><button v-for="task in group.tasks" :key="task.id" class="production-own-task" @click="selectedProductionTask = task.id; selectedBatchPlan = group.planId"><div class="production-own-task-icon" :class="task.task_type">{{ task.task_type === 'mashing' ? '糖' : task.task_type === 'fermentation' ? '酵' : '料' }}</div><div class="production-own-task-main"><strong>{{ task.name }}</strong><span>{{ task.assignee?.name || '仓库人员' }}<template v-if="task.task_type === 'fermentation' && task.fermentation_execution?.started_at && task.state === 'in_progress'"> · 发酵第 {{ task.fermentation_execution.day }} 天 · 待办 {{ task.fermentation_execution.entries.filter(entry => ['pending','overdue'].includes(entry.status)).length }} 项</template><template v-if="task.execution_blocked_reason && !['done','cancelled'].includes(task.state)"> · {{ task.execution_blocked_reason }}</template></span></div><StatusTag :text="stateLabel(task)" /><b>查看 / 执行 →</b></button></article></div></section>
+    <ProductionPlanDetail :plan-id="selectedBatchPlan" :focus-task-id="selectedProductionTask" :allow-execution="true" @close="selectedBatchPlan = null" @changed="load" @open-task="selectedBatchPlan = null; openMashExecution($event)" />
+    <div class="panel"><div class="panel-header"><div class="panel-title">{{ taskFilterLabels[taskFilter] }}</div><button class="btn btn-sm btn-secondary" @click="load">刷新</button></div><div class="panel-body task-list"><div v-if="loading" class="empty">正在加载...</div><div v-else-if="error" class="master-error">{{ error }}</div><div v-for="task in otherTasks" v-else :key="task.id" class="task-card task-card-rich"><div class="task-kind-icon" :class="['recipe_review','recipe_revision'].includes(task.task_type) ? 'recipe-review-icon' : 'generic-task-icon'"><svg v-if="['recipe_review','recipe_revision'].includes(task.task_type)" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1-2-2Z"/><path d="M14 3.75v4h4M8.5 12h7M8.5 15.5h5M8.5 8.5h2"/></svg><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5zM8 9h8M8 12h8M8 15h5"/></svg></div><div class="task-card-content"><div class="task-title">{{ task.name }}</div><div class="task-meta"><span class="task-type-pill" :class="{ recipe: ['recipe_review','recipe_revision'].includes(task.task_type) }">{{ taskTypeLabel(task) }}</span><span v-if="task.due_at">截止 {{ task.due_at.replace('T',' ').slice(0,16) }}</span><span v-if="task.assignee?.name">处理人 {{ task.assignee.name }}</span></div><div v-if="task.last_comment" class="task-review-note"><strong>{{ task.task_type === 'recipe_revision' || (task.state === 'done' && task.last_comment.startsWith('退回修改：')) ? '退回意见' : '处理备注' }}</strong><span>{{ taskComment(task) }}</span></div></div><div class="task-card-actions"><StatusTag :text="stateLabel(task)" /><button v-if="task.task_type === 'mashing'" class="btn btn-xs btn-outline" @click="openMashExecution(task)">打开糖化执行清单</button><button v-else-if="task.task_type === 'recipe_review' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方并审核</button><button v-else-if="task.task_type === 'recipe_review'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看审核流程</button><button v-else-if="task.task_type === 'recipe_revision' && !['done','cancelled'].includes(task.state)" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">修改配方并重新提交</button><button v-else-if="task.task_type === 'recipe_revision'" class="btn btn-xs btn-outline" @click="openRecipeReview(task.target_id)">查看配方版本</button><button v-else-if="task.task_type === 'demand_review'" class="btn btn-xs btn-outline" @click="openDemandReview(task.target_id)">{{ ['done','cancelled'].includes(task.state) ? '查看需求' : '查看并确认需求' }}</button><template v-else-if="task.approval_id && task.state === 'pending'"><button class="btn btn-xs btn-outline" @click="resolveApproval(task, 'return')">退回</button><button class="btn btn-xs btn-primary" @click="resolveApproval(task, 'approve')">通过</button></template></div></div><div v-if="!loading && !error && !visibleTasks.length" class="empty">{{ taskFilter === 'pending' ? '当前角色暂无待办' : taskFilter === 'urgent' ? '当前没有紧急任务' : taskFilter === 'done' ? '暂无已完成任务' : '暂无任务记录' }}</div></div></div>
     <div v-if="reviewDemand" class="equipment-modal-mask" @click.self="reviewDemand = null"><section class="equipment-modal demand-review-modal" role="dialog" aria-modal="true" aria-label="确认产品需求"><div class="equipment-modal-header"><div><div class="modal-title">确认产品需求 · {{ reviewDemand.product?.name || '' }}</div><div class="modal-subtitle">核对产品、包装和交付要求后给出结论</div></div><button class="equipment-close" type="button" aria-label="关闭" @click="reviewDemand = null">×</button></div><div class="equipment-modal-body demand-review-body"><div class="demand-review-summary"><div><span>客户</span><strong>{{ reviewDemand.customer?.name || '—' }}</strong></div><div><span>产品</span><strong>{{ reviewDemand.product?.name || '—' }}</strong></div><div><span>包装方式</span><strong>{{ demandPackagingSummary(reviewDemand) }}</strong></div><div><span>包装数量</span><strong>{{ reviewDemand.package_qty }} {{ reviewDemand.packaging_method === 'keg' ? '桶' : reviewDemand.packaging_method === 'box' ? '箱' : '件' }}</strong></div><div><span>所需酒液</span><strong>{{ reviewDemand.requested_volume_l }} L</strong></div><div><span>要求出品日期</span><strong>{{ reviewDemand.requested_delivery_date || '—' }}</strong></div></div><div v-if="reviewDemand.customer_reference || reviewDemand.notes" class="demand-review-notes"><span>客户要求</span><p>{{ reviewDemand.customer_reference ? '参考号：' + reviewDemand.customer_reference : '' }} {{ reviewDemand.notes }}</p></div><div v-if="reviewDemand.decision_reason" class="demand-review-notes"><span>处理意见</span><p>{{ reviewDemand.decision_reason }}</p></div><label v-if="reviewDemand.state === 'submitted'" class="demand-review-reason"><span>退回原因 <small>退回修改时必填</small></span><textarea v-model.trim="reviewReason" rows="3" placeholder="说明需要销售修改的内容"></textarea></label><div v-if="reviewError" class="master-error">{{ reviewError }}</div></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="reviewDemand = null">关闭</button><template v-if="reviewDemand.state === 'submitted'"><button class="btn btn-outline" type="button" :disabled="reviewSaving" @click="resolveDemand('return')">退回修改</button><button class="btn btn-primary" type="button" :disabled="reviewSaving" @click="resolveDemand('confirm')">{{ reviewSaving ? '处理中...' : '确认需求' }}</button></template></div></section></div>
+    <div v-if="executionTask" class="equipment-modal-mask" @click.self="executionTask = null"><section class="equipment-modal mash-execution-modal" role="dialog" aria-modal="true" aria-label="糖化执行清单"><div class="equipment-modal-header"><div><div class="modal-title">{{ executionTask.name }} · 糖化执行清单</div><div class="modal-subtitle">按配方顺序逐项确认；保温时间从对应节点确认后开始计算</div></div><button class="equipment-close" type="button" aria-label="关闭清单" @click="executionTask = null">×</button></div><div class="equipment-modal-body mash-execution-body"><div v-if="executionError" class="master-error">{{ executionError }}</div><ol class="mash-checkpoint-list"><li v-for="(node, index) in executionTask.execution_checkpoints || []" :key="node.code" class="mash-checkpoint" :class="{ done: node.state === 'done', current: node.state !== 'done' && !(executionTask.execution_checkpoints || []).slice(0,index).some(item => item.state !== 'done') }"><div class="mash-checkpoint-number">{{ node.state === 'done' ? '✓' : String(index + 1).padStart(2,'0') }}</div><div class="mash-checkpoint-main"><div class="mash-checkpoint-title">{{ node.title }}</div><div v-if="node.state === 'done' && node.completed_at" class="mash-checkpoint-meta">完成时间：{{ checkpointCompletedTime(node.completed_at) }}<span v-if="node.completed_by"> · {{ node.completed_by }}</span></div><div v-if="node.target" class="mash-checkpoint-meta">{{ node.temperature !== undefined ? '目标 ' + node.temperature + '℃ · ' + node.duration_min + ' 分钟' : node.quantity !== undefined ? '用量 ' + node.quantity + (node.unit || '') : node.target }}</div><div v-if="node.last_result" class="mash-checkpoint-warning">上次检查：{{ node.last_result }}。处理后重新检查，合格才能继续。</div><div v-if="node.timer_from" class="mash-checkpoint-timer">{{ node.state === 'done' ? '已确认' : (checkpointDate(node, executionTask.execution_checkpoints) ? '预计完成 ' + checkpointDate(node, executionTask.execution_checkpoints) : '确认开始后计时 ' + node.due_after_min + ' 分钟') }}</div><div v-if="node.state !== 'done' && !(executionTask.execution_checkpoints || []).slice(0,index).some(item => item.state !== 'done')" class="mash-checkpoint-control"><template v-if="node.input_mode === 'choice'"><button v-for="choice in node.choices || []" :key="choice" class="btn btn-xs btn-outline" type="button" :disabled="executionSaving" @click="confirmMashCheckpoint(node, choice)">{{ choice }}</button></template><template v-else-if="node.input_mode === 'number'"><input v-model="executionValues[node.code]" type="number" step="any" :placeholder="'输入' + (node.title || '实测值')"><span>{{ node.unit || (node.target === '℃' || node.target?.startsWith('℃') ? '℃' : node.target === 'L' ? 'L' : '') }}</span><button class="btn btn-xs btn-primary" type="button" :disabled="executionSaving" @click="confirmMashCheckpoint(node, executionValues[node.code])">确认</button></template><template v-else-if="node.input_mode === 'text'"><input v-model="executionValues[node.code]" type="text" placeholder="填写记录"><button class="btn btn-xs btn-primary" type="button" :disabled="executionSaving || !executionValues[node.code]?.trim()" @click="confirmMashCheckpoint(node, executionValues[node.code])">确认</button></template><button v-else class="btn btn-xs btn-primary" type="button" :disabled="executionSaving" @click="confirmMashCheckpoint(node)">{{ executionSaving ? '提交中…' : '确认并继续' }}</button></div></div><StatusTag v-if="node.state === 'done'" text="已完成" /><span v-else-if="index === 0 || !(executionTask.execution_checkpoints || []).slice(0,index).some(item => item.state !== 'done')" class="mash-current-tag">当前节点</span></li></ol></div><div class="equipment-modal-footer"><button class="btn btn-secondary" type="button" @click="executionTask = null">关闭</button><button class="btn btn-primary" type="button" :disabled="executionSaving || ['done','cancelled'].includes(executionTask.state) || !(executionTask.execution_checkpoints || []).length || (executionTask.execution_checkpoints || []).some(node => node.state !== 'done')" @click="completeMashExecution">{{ executionSaving ? '提交中…' : executionTask.state === 'done' ? '糖化任务已完成' : '完成糖化任务' }}</button></div></section></div>
   `
 });
 

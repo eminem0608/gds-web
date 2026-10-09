@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { standardMashOperations } from '../recipe-calculations';
 
 const props = defineProps({
   mash: { type: Object, required: true },
@@ -13,7 +14,6 @@ const activeIndex = ref(0);
 const stages = [
   { key: 'materials', title: '物料确认', short: '确认' },
   { key: 'water_mash', title: '准备糖化水与投料糖化', short: '用水糖化' },
-  { key: 'iodine', title: '糖化检测', short: '检测' },
   { key: 'lautering', title: '转槽与过滤', short: '过滤' },
   { key: 'sparge', title: '分轮洗糟', short: '洗糟' },
   { key: 'kettle', title: '进入煮沸锅', short: '进锅' },
@@ -35,6 +35,7 @@ const stageOperations = computed(() => {
   return Array.isArray(list) ? list : [];
 });
 const spargeValues = computed(() => props.metrics.spargeWaters || props.mash.sparge_water_liters || []);
+const iodinePositions = computed(() => Array.from({ length: Math.max(props.mash.steps?.length || 0, 4) + 1 }, (_, index) => index));
 const inputModes = [
   ['confirm', '执行确认'], ['choice', '选择结果'], ['number', '录入数值'], ['text', '文字记录'],
 ];
@@ -51,7 +52,13 @@ function ensureOperations() {
 }
 function addOperation() {
   ensureOperations();
-  props.mash.workflow.operations[activeStage.value.key].push({ name: '', input_mode: 'confirm', target: '', unit: '', required: true });
+  const id = globalThis.crypto?.randomUUID?.() || `custom_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  props.mash.workflow.operations[activeStage.value.key].push({ id, name: '', input_mode: 'confirm', target: '', unit: '', required: true });
+}
+function restoreStandardOperations() {
+  ensureOperations();
+  const defaults = standardMashOperations[activeStage.value.key] || [];
+  props.mash.workflow.operations[activeStage.value.key] = JSON.parse(JSON.stringify(defaults));
 }
 function removeOperation(index) {
   const operation = stageOperations.value[index];
@@ -119,15 +126,18 @@ function setIodineRequired(value) { props.mash.workflow.iodine_check_required = 
 
       <section class="mwd-detail-block">
         <div class="mwd-subheading"><strong>糖化温度曲线</strong><button type="button" class="mwd-add-button" @click="addRest">＋ 添加温度段</button></div>
-        <div v-if="mash.steps.length" class="mwd-rest-list"><div v-for="(rest,index) in mash.steps" :key="`rest-${index}`" class="mwd-rest-row"><span class="mwd-rest-index">{{ String(index + 1).padStart(2, '0') }}</span><input v-model.trim="rest.name" placeholder="温度段名称，如：β-淀粉酶休止"><label><input v-model.number="rest.temperature" type="number" min="0" max="100" step="0.1" placeholder="℃"><small>温度</small></label><label><input v-model.number="rest.duration_min" type="number" min="1" step="1" placeholder="分钟"><small>时长</small></label><button type="button" class="mwd-remove" @click="removeRest(index)" aria-label="删除温度段">×</button></div></div>
+        <div class="mwd-iodine-config">
+          <label class="mwd-iodine-toggle"><span>需要碘反应检查</span><label class="mwd-toggle"><input :checked="mash.workflow?.iodine_check_required !== false" type="checkbox" @change="setIodineRequired($event.target.checked)"><span></span></label></label>
+          <label v-if="mash.workflow?.iodine_check_required !== false" class="mwd-iodine-position"><span>检查位置</span><select v-model.number="mash.workflow.iodine_after_step"><option v-for="position in iodinePositions" :key="position" :value="position">{{ position === 0 ? '第一段前' : `第 ${position} 段后` }}</option></select><small>执行时确认合格后，才继续下一温度段</small></label>
+        </div>
+        <div v-if="mash.steps.length" class="mwd-rest-list">
+          <div class="mwd-rest-head"><span>序号</span><span>温度段</span><span>目标温度</span><span>保持时长</span><span>操作</span></div>
+          <template v-for="(rest,index) in mash.steps" :key="`rest-${index}`"><div class="mwd-rest-row"><span class="mwd-rest-index">{{ String(index + 1).padStart(2, '0') }}</span><input v-model.trim="rest.name" placeholder="如：β-淀粉酶休止"><label><input v-model.number="rest.temperature" type="number" min="0" max="100" step="0.1" placeholder="℃"><small>℃</small></label><label><input v-model.number="rest.duration_min" type="number" min="1" step="1" placeholder="分钟"><small>分钟</small></label><button type="button" class="mwd-remove" @click="removeRest(index)" aria-label="删除温度段">×</button></div><div v-if="mash.workflow?.iodine_check_required !== false && Number(mash.workflow?.iodine_after_step || 0) === index + 1" class="mwd-iodine-in-sequence"><span>◇</span><strong>碘反应检查</strong><small>本温度段完成后检查；合格后继续升温</small><b>执行时选择合格 / 不合格</b></div></template>
+          <p class="mwd-hint">达到目标温度并确认后开始计时；保持时长按分钟填写。</p>
+        </div>
         <div v-else class="mwd-empty">添加温度段后，生产执行会按这里的顺序显示目标温度和计时。</div>
       </section>
       </template>
-
-      <section v-else-if="activeStage.key === 'iodine'" class="mwd-detail-block">
-        <div class="mwd-choice-card"><div><strong>需要碘反应检查</strong></div><label class="mwd-toggle"><input :checked="mash.workflow?.iodine_check_required !== false" type="checkbox" @change="setIodineRequired($event.target.checked)"><span></span></label></div>
-        <div class="mwd-choice-hint"><span>执行时由负责人选择结果</span><b>合格 / 不合格</b></div>
-      </section>
 
       <section v-else-if="activeStage.key === 'sparge'" class="mwd-detail-block">
         <div class="mwd-inline-fields"><label><span>洗糟水温度</span><div><input v-model.number="mash.workflow.sparge_temperature_c" type="number" min="0" max="100" step="0.1"><b>℃</b></div></label><label><span>洗糟轮次</span><div><input v-model.number="mash.sparge_count" type="number" min="1" max="10" step="1"><b>次</b></div></label></div>
@@ -159,10 +169,11 @@ function setIodineRequired(value) { props.mash.workflow.iodine_check_required = 
       <section v-if="activeStage.key === 'materials'" class="mwd-custom-block">
         <div class="mwd-fixed-note"><span>生产计划下发后</span><strong>系统自动生成「备料 / 物料确认」任务</strong></div>
       </section>
-      <section v-else class="mwd-custom-block">
-        <div class="mwd-subheading"><strong>本步骤操作</strong><button type="button" class="mwd-add-button" @click="addOperation">＋ 添加操作</button></div>
-        <div v-for="(operation,index) in stageOperations" :key="`custom-${index}`" class="mwd-custom-row"><input v-model.trim="operation.name" placeholder="操作名称，如：记录麦汁流速"><select v-model="operation.input_mode"><option v-for="mode in inputModes" :key="mode[0]" :value="mode[0]">{{ mode[1] }}</option></select><input v-if="operation.input_mode === 'number'" v-model.trim="operation.target" placeholder="目标值"><input v-else-if="operation.input_mode === 'choice'" v-model.trim="operation.target" placeholder="选项，用 / 分隔"><input v-else v-model.trim="operation.target" placeholder="执行要求或说明"><button type="button" class="mwd-remove" @click="removeOperation(index)" aria-label="删除补充操作">×</button></div>
-        <div v-if="!stageOperations.length" class="mwd-no-custom">暂无补充操作，标准步骤已由系统列出。</div>
+      <section class="mwd-custom-block">
+        <div class="mwd-subheading"><strong>本步骤操作节点</strong><div class="mwd-operation-actions"><button v-if="standardMashOperations[activeStage.key]?.length" type="button" class="mwd-text-button" @click="restoreStandardOperations">恢复标准节点</button><button type="button" class="mwd-add-button" @click="addOperation">＋ 添加节点</button></div></div>
+        <p class="mwd-hint">标准节点会带入生产执行清单；名称和要求可修改，删除后不会在本配方的执行清单中生成。</p>
+        <div v-for="(operation,index) in stageOperations" :key="operation.id || `custom-${index}`" class="mwd-custom-row"><input v-model.trim="operation.name" placeholder="操作名称"><select v-model="operation.input_mode"><option v-for="mode in inputModes" :key="mode[0]" :value="mode[0]">{{ mode[1] }}</option></select><input v-if="operation.input_mode === 'number'" v-model.trim="operation.target" placeholder="目标值 / 单位"><input v-else-if="operation.input_mode === 'choice'" v-model.trim="operation.target" placeholder="选项，用 / 分隔"><input v-else v-model.trim="operation.target" placeholder="执行要求或说明"><button type="button" class="mwd-remove" @click="removeOperation(index)" aria-label="删除操作节点">×</button></div>
+        <div v-if="!stageOperations.length" class="mwd-no-custom">本步骤没有执行节点。你可以添加节点，或恢复标准节点。</div>
       </section>
 
       <footer class="mwd-navigation"><button type="button" :disabled="activeIndex === 0" @click="activeIndex--">上一步</button><span>{{ activeIndex + 1 }} / {{ stages.length }}</span><button type="button" :disabled="activeIndex === stages.length - 1" @click="activeIndex++">下一步</button></footer>
@@ -177,11 +188,27 @@ function setIodineRequired(value) { props.mash.workflow.iodine_check_required = 
 .mwd-overall-notes{display:grid;gap:5px;margin-top:10px;color:var(--text-muted,#918b80);font-size:10px}.mwd-overall-notes textarea{box-sizing:border-box;width:100%;resize:vertical;padding:8px 10px;border:1px solid rgba(255,255,255,.1);border-radius:7px;background:rgba(0,0,0,.14);color:var(--text-primary,#eee9df);font:inherit;font-size:11px}
 .mwd-legend{display:flex;flex-wrap:wrap;gap:8px 16px;color:var(--text-muted,#918b80);font-size:9px}.mwd-legend span{display:flex;align-items:center;gap:5px}.mwd-legend i{width:7px;height:7px;border-radius:50%;background:var(--mwd-gold)}.mwd-legend i.edit{background:#8db9d3}.mwd-legend i.field{background:#9acb9f}
 .mwd-stepper{position:relative;display:grid;grid-template-columns:repeat(10,minmax(36px,1fr));gap:4px;padding:2px 0 0}.mwd-progress-track{height:2px;position:absolute;left:4.5%;right:4.5%;top:15px;background:rgba(255,255,255,.1)}.mwd-progress-track span{display:block;height:100%;background:var(--mwd-gold);transition:width .2s ease}.mwd-step-dot{position:relative;z-index:1;display:grid;justify-items:center;gap:6px;padding:0;border:0;background:transparent;color:var(--text-muted,#918b80);cursor:pointer}.mwd-step-dot b{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:#272521;font-size:10px;transition:.2s}.mwd-step-dot span{font-size:9px;white-space:nowrap}.mwd-step-dot.active b,.mwd-step-dot.passed b{border-color:var(--mwd-gold);background:var(--mwd-gold);color:#211d16;box-shadow:0 0 0 4px rgba(212,168,83,.12)}.mwd-step-dot.active span{color:var(--mwd-gold);font-weight:700}
+.mwd-stepper{grid-template-columns:repeat(8,minmax(36px,1fr))}
 .mwd-stage-card{overflow:hidden;border:1px solid var(--mwd-line);border-radius:14px;background:linear-gradient(145deg,rgba(212,168,83,.07),rgba(255,255,255,.018) 55%)}.mwd-stage-title{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.08)}.mwd-stage-title>div>span{color:var(--mwd-gold);font-size:10px;font-weight:700}.mwd-stage-title h4{font-size:17px;margin:3px 0}
 .mwd-detail-block,.mwd-custom-block{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.07)}.mwd-subheading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.mwd-subheading strong{font-size:12px}.mwd-subheading>span{font-size:10px;color:var(--text-muted,#918b80)}
 .mwd-value-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.mwd-value-grid>div{padding:13px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(0,0,0,.12)}.mwd-value-grid small{display:block;color:var(--text-muted,#918b80);font-size:10px}.mwd-value-grid strong{display:block;margin:5px 0;font-size:22px;color:#f1e9d8}.mwd-value-grid strong i{font-size:12px;font-weight:500;font-style:normal;color:var(--mwd-gold)}.mwd-inline-setting{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:11px}.mwd-inline-setting>span{color:var(--text-secondary,#c9c3b9)}.mwd-inline-setting select,.mwd-custom-row select{min-height:32px;padding:0 9px;border:1px solid rgba(255,255,255,.13);border-radius:7px;background:#24221e;color:var(--text-primary,#eee9df)}.mwd-warning{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 0;padding:9px 11px;border-radius:8px;background:rgba(212,168,83,.1);color:#e7c77c;font-size:11px}.mwd-warning button{flex:none;padding:5px 8px;border:1px solid rgba(212,168,83,.35);border-radius:6px;background:rgba(212,168,83,.1);color:#e7c77c;font:inherit;font-size:10px;cursor:pointer}
 .mwd-rest-list,.mwd-material-list,.mwd-hop-list,.mwd-water-list{display:grid;gap:7px}.mwd-rest-row{display:grid;grid-template-columns:30px minmax(120px,1fr) 105px 105px 28px;align-items:center;gap:8px;padding:8px;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(0,0,0,.1)}.mwd-rest-index{color:var(--mwd-gold);font-size:10px;font-weight:800}.mwd-rest-row>input,.mwd-rest-row label input,.mwd-water-list input,.mwd-inline-fields input,.mwd-custom-row input{box-sizing:border-box;width:100%;min-width:0;height:33px;padding:0 9px;border:1px solid rgba(255,255,255,.12);border-radius:7px;background:rgba(0,0,0,.16);color:var(--text-primary,#eee9df);font:inherit;font-size:11px}.mwd-rest-row label{position:relative}.mwd-rest-row label input{padding-right:28px}.mwd-rest-row label small{position:absolute;right:8px;top:10px;color:var(--text-muted,#918b80);font-size:9px;pointer-events:none}.mwd-remove{width:26px;height:26px;border:0;border-radius:7px;background:rgba(255,255,255,.07);color:#c8bca9;font-size:18px;cursor:pointer}.mwd-remove:hover{background:rgba(210,91,75,.18);color:#f09a8d}.mwd-add-button{border:1px solid rgba(212,168,83,.3);border-radius:7px;padding:6px 9px;background:rgba(212,168,83,.08);color:var(--mwd-gold);font-size:10px;cursor:pointer}.mwd-hint{margin:9px 0 0;color:var(--text-muted,#918b80);font-size:10px;line-height:1.6}.mwd-empty,.mwd-no-custom{padding:13px;border:1px dashed rgba(255,255,255,.12);border-radius:8px;color:var(--text-muted,#918b80);font-size:11px}.mwd-material-list{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.mwd-material-list>div{display:flex;justify-content:space-between;gap:10px;padding:10px;border-radius:8px;background:rgba(0,0,0,.12);font-size:11px}.mwd-material-list strong{color:#e8cf96}.mwd-choice-card{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:14px;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:rgba(0,0,0,.12)}.mwd-choice-card strong{font-size:12px}.mwd-choice-card p{margin:5px 0 0;color:var(--text-muted,#918b80);font-size:10px;line-height:1.6}.mwd-toggle input{position:absolute;opacity:0}.mwd-toggle span{display:block;width:38px;height:22px;border-radius:20px;background:#514b40;cursor:pointer;transition:.2s}.mwd-toggle span:after{content:'';display:block;width:16px;height:16px;margin:3px;border-radius:50%;background:#eee;transition:.2s}.mwd-toggle input:checked+span{background:var(--mwd-gold)}.mwd-toggle input:checked+span:after{transform:translateX(16px);background:#211d16}.mwd-choice-hint,.mwd-fixed-note{display:flex;justify-content:space-between;gap:12px;margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(212,168,83,.08);font-size:10px;color:var(--text-muted,#918b80)}.mwd-choice-hint b,.mwd-fixed-note strong{color:#e4c47d;font-weight:700}.mwd-inline-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.mwd-inline-fields>label>span{display:block;margin-bottom:6px;font-size:11px;color:var(--text-secondary,#c9c3b9)}.mwd-inline-fields>label>div,.mwd-water-list label>div{display:flex;align-items:center;gap:7px}.mwd-inline-fields b,.mwd-water-list b{color:var(--mwd-gold);font-size:10px}.mwd-inline-fields small{display:block;margin-top:5px;color:var(--text-muted,#918b80);font-size:9px}.mwd-sparge-heading{margin-top:15px}.mwd-water-list{grid-template-columns:repeat(3,minmax(0,1fr))}.mwd-water-list label{display:grid;gap:5px;padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:8px}.mwd-water-list label>span{font-size:10px;color:var(--text-muted,#918b80)}.mwd-hop-list>div{display:grid;grid-template-columns:90px minmax(100px,1fr) auto;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;background:rgba(0,0,0,.12);font-size:11px}.mwd-hop-time{color:var(--mwd-gold);font-size:9px;font-weight:700}.mwd-hop-list small{color:var(--text-muted,#918b80)}.mwd-single-value{grid-template-columns:minmax(180px,260px)}
 .mwd-custom-block{background:rgba(0,0,0,.08)}.mwd-custom-block>.mwd-hint{margin:-4px 0 10px}.mwd-custom-row{display:grid;grid-template-columns:minmax(120px,1fr) 115px minmax(100px,.8fr) 28px;gap:7px;margin-top:7px}.mwd-custom-row input,.mwd-custom-row select{font-size:10px}.mwd-navigation{display:flex;align-items:center;justify-content:space-between;padding:13px 20px}.mwd-navigation button{min-width:78px;padding:7px 12px;border:1px solid rgba(212,168,83,.3);border-radius:7px;background:rgba(212,168,83,.08);color:var(--mwd-gold);font-size:11px;cursor:pointer}.mwd-navigation button:disabled{opacity:.35;cursor:not-allowed}.mwd-navigation span{color:var(--text-muted,#918b80);font-size:10px}
-@media(max-width:680px){.mwd-stepper{overflow:auto;grid-template-columns:repeat(10,48px);padding-bottom:6px}.mwd-progress-track{left:24px;right:auto;width:calc(10 * 48px - 48px)}.mwd-step-dot span{font-size:8px}.mwd-stage-title,.mwd-detail-block,.mwd-custom-block{padding-left:13px;padding-right:13px}.mwd-rest-row{grid-template-columns:24px 1fr 82px 82px 26px;gap:5px}.mwd-inline-fields{grid-template-columns:1fr}.mwd-custom-row{grid-template-columns:minmax(100px,1fr) 100px 28px}.mwd-custom-row input:nth-of-type(2){grid-column:1/3}.mwd-water-list{grid-template-columns:1fr}.mwd-value-grid{grid-template-columns:1fr}.mwd-parameter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mwd-calculation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.mwd-stepper{overflow:auto;grid-template-columns:repeat(8,48px);padding-bottom:6px}.mwd-progress-track{left:24px;right:auto;width:calc(8 * 48px - 48px)}.mwd-step-dot span{font-size:8px}.mwd-stage-title,.mwd-detail-block,.mwd-custom-block{padding-left:13px;padding-right:13px}.mwd-rest-row{grid-template-columns:24px 1fr 82px 82px 26px;gap:5px}.mwd-inline-fields{grid-template-columns:1fr}.mwd-custom-row{grid-template-columns:minmax(100px,1fr) 100px 28px}.mwd-custom-row input:nth-of-type(2){grid-column:1/3}.mwd-water-list{grid-template-columns:1fr}.mwd-value-grid{grid-template-columns:1fr}.mwd-parameter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mwd-calculation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:390px){.mwd-parameter-grid{grid-template-columns:1fr}.mwd-calculation-card{min-height:52px;padding:9px}.mwd-calculation-card>span{font-size:10px}.mwd-calculation-card strong{font-size:16px}}
+.mwd-toggle span{position:relative;box-sizing:border-box}
+.mwd-toggle span:after{position:absolute;left:3px;top:50%;margin:0;transform:translateY(-50%)}
+.mwd-toggle input:checked+span:after{transform:translate(16px,-50%)}
+.mwd-rest-head{display:grid;grid-template-columns:30px minmax(120px,1fr) 105px 105px 28px;gap:8px;padding:0 8px;color:var(--text-muted,#918b80);font-size:10px}
+.mwd-rest-head span:nth-child(1),.mwd-rest-head span:last-child{text-align:center}
+@media(max-width:680px){.mwd-rest-head{grid-template-columns:24px 1fr 82px 82px 26px;gap:5px;padding:0 8px;font-size:9px}}
+.mwd-iodine-config{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:0 0 12px;padding:10px 12px;border:1px solid rgba(212,168,83,.18);border-radius:8px;background:rgba(212,168,83,.045)}
+.mwd-iodine-toggle{display:flex;align-items:center;gap:12px;color:var(--text-secondary,#c9c3b9);font-size:11px}
+.mwd-iodine-position{display:flex;align-items:center;gap:8px;color:var(--text-muted,#918b80);font-size:10px}
+.mwd-iodine-position select{min-height:30px;padding:0 8px;border:1px solid rgba(255,255,255,.13);border-radius:6px;background:#24221e;color:var(--text-primary,#eee9df);font:inherit}
+.mwd-iodine-position small{color:var(--text-muted,#918b80)}
+.mwd-iodine-in-sequence{display:flex;align-items:center;gap:8px;margin:5px 0;padding:10px 12px;border:1px dashed rgba(212,168,83,.42);border-radius:8px;background:rgba(212,168,83,.08);color:#e8cf96;font-size:11px}
+.mwd-iodine-in-sequence>span{font-size:16px}.mwd-iodine-in-sequence small{color:var(--text-muted,#a29b8f)}.mwd-iodine-in-sequence b{margin-left:auto;color:#e4c47d;font-size:10px}
+.mwd-operation-actions{display:flex;align-items:center;gap:8px}.mwd-text-button{padding:5px 8px;border:0;background:transparent;color:var(--text-muted,#918b80);font-size:10px;cursor:pointer}.mwd-text-button:hover{color:var(--mwd-gold)}
+@media(max-width:680px){.mwd-iodine-config{align-items:flex-start;flex-direction:column}.mwd-iodine-position{flex-wrap:wrap}.mwd-iodine-in-sequence{align-items:flex-start;flex-wrap:wrap}.mwd-iodine-in-sequence b{margin-left:0}}
 </style>

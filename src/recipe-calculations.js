@@ -1,12 +1,45 @@
 // Percent fields use 0..100; gravity uses SG; weights are kg (grain) / g (hops, yeast).
 export const fixedUtilization = { FWH: 40, '60': 23, '30': 11, '0': 11, WP: 11, DH: 0 };
 export const present = value => value !== '' && value !== null && value !== undefined && Number.isFinite(Number(value));
+export const standardMashOperations = {
+  materials: [
+    { id: 'confirm_materials', name: '确认本批所需物料', input_mode: 'confirm', target: '核对生产计划中的麦芽、辅料、酒花和酵母；领料后确认。', required: true },
+  ],
+  water_mash: [
+    { id: 'prepare_mash_water', name: '准备糖化水并加热', input_mode: 'confirm', target: '按配方计算水量，加热至第一温度段加预热温差。', required: true },
+    { id: 'mash_in', name: '混入麦芽并确认', input_mode: 'confirm', target: '确认投料完成并记录时间。', required: true },
+    { id: 'prepare_sparge_water', name: '准备洗糟水', input_mode: 'confirm', target: '按配方准备洗糟水并升至设定温度。', required: true },
+  ],
+  lautering: [
+    { id: 'transfer_lauter', name: '转移至过滤槽', input_mode: 'confirm', target: '确认开始转槽并记录时间。', required: true },
+    { id: 'filter_start', name: '开始过滤', input_mode: 'confirm', target: '确认过滤开始并记录时间。', required: true },
+  ],
+  kettle: [
+    { id: 'transfer_kettle', name: '开始进煮沸锅', input_mode: 'confirm', target: '确认麦汁开始进入煮沸锅并记录时间。', required: true },
+    { id: 'heat_kettle', name: '开始加热煮沸锅', input_mode: 'confirm', target: '确认开始加热并记录时间。', required: true },
+    { id: 'filter_end', name: '过滤结束', input_mode: 'confirm', target: '确认过滤结束并记录时间。', required: true },
+  ],
+  boil: [
+    { id: 'boil_start', name: '煮沸锅沸腾，开始计时', input_mode: 'confirm', target: '确认麦汁达到沸腾；此时开始煮沸计时和酒花投放提醒。', required: true },
+    { id: 'boil_end', name: '煮沸结束', input_mode: 'confirm', target: '完成配方设定的煮沸时长后确认并记录时间。', required: true },
+  ],
+  whirlpool: [
+    { id: 'whirlpool_start', name: '麦汁进入回旋沉淀槽', input_mode: 'confirm', target: '确认开始转入并记录时间。', required: true },
+    { id: 'whirlpool_end', name: '麦汁转移完成并开始回旋计时', input_mode: 'confirm', target: '确认转移完成；按设备设定回旋时间计时。', required: true },
+  ],
+  transfer: [
+    { id: 'cooling_target', name: '冷却至目标发酵温度', input_mode: 'confirm', target: '目标温度来自糖化 / 发酵工艺；达到后确认。', required: true },
+    { id: 'transfer_fermenter', name: '结束进发酵罐', input_mode: 'confirm', target: '确认进罐完成并记录时间。', required: true },
+    { id: 'actual_temperature', name: '记录实际进罐温度', input_mode: 'number', target: '℃', required: true },
+    { id: 'actual_volume', name: '记录实际进罐体积', input_mode: 'number', target: 'L', required: true },
+  ],
+};
 const num = (value, fallback = 0) => present(value) ? Number(value) : fallback;
 export function emptyDesign() {
   return { schema_version: 2, brew_volume_l: 1000, brew_equipment_id: '', ibu_method: 'tinseth',
     targets: { og: '', fg: '', ibu: '', color: '', abv: '' },
     fermentables: [], hops: [], yeast: [], attenuation_override: '',
-    mash: { efficiency: 72, water_grain_ratio: 3.5, absorption_rate: 0.8, boil_time_min: 60, evaporation_rate: 10, screen_water_l: 0, sparge_count: 3, sparge_mode: 'auto', sparge_water_liters: [], steps: [], notes: '', workflow: { preheat_offset_c: 5, sparge_temperature_c: 78, iodine_check_required: true, whirlpool_time_min: 20, cooling_temperature_c: 18, operations: {} } },
+    mash: { efficiency: 72, water_grain_ratio: 3.5, absorption_rate: 0.8, boil_time_min: 60, evaporation_rate: 10, screen_water_l: 0, sparge_count: 3, sparge_mode: 'auto', sparge_water_liters: [], steps: [], notes: '', workflow: { preheat_offset_c: 5, sparge_temperature_c: 78, iodine_check_required: true, iodine_after_step: 4, whirlpool_time_min: 20, cooling_temperature_c: 18, operations: JSON.parse(JSON.stringify(standardMashOperations)) } },
     fermentation: { target_temperature: '', target_days: '', cold_storage_temperature: '', notes: '', steps: [] } };
 }
 export function normalizeDesign(saved = {}, version = {}) {
