@@ -230,6 +230,9 @@ export const brewApi = {
   listPurchaseRequisitions(params = {}) {
     return request(`/api/v1/purchase-requisitions?${new URLSearchParams(params).toString()}`);
   },
+  getPurchaseRequisition(id) {
+    return request(`/api/v1/purchase-requisitions/${id}`);
+  },
   createPurchaseRequisition(data) {
     return request("/api/v1/purchase-requisitions", {
       method: "POST",
@@ -237,12 +240,19 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
-  listPurchaseSourcePlans() {
-    return request("/api/v1/purchase-requisitions/source-plans");
+  listPurchaseSourcePlans(params = {}) {
+    return request(`/api/v1/purchase-requisitions/source-plans?${new URLSearchParams(params).toString()}`);
   },
   aggregatePurchaseRequisitions(data) {
     return request("/api/v1/purchase-requisitions/aggregate", {
       method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  updatePurchaseRequisition(id, data) {
+    return request(`/api/v1/purchase-requisitions/${id}`, {
+      method: "PATCH",
       headers: { "Idempotency-Key": idempotencyKey() },
       body: JSON.stringify(data)
     });
@@ -256,6 +266,16 @@ export const brewApi = {
   },
   listPurchaseOrders(params = {}) {
     return request(`/api/v1/purchase-orders?${new URLSearchParams(params).toString()}`);
+  },
+  getPurchaseOrder(id) {
+    return request(`/api/v1/purchase-orders/${id}`);
+  },
+  updatePurchaseOrder(id, data) {
+    return request(`/api/v1/purchase-orders/${id}`, {
+      method: "PATCH",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
   },
   createPurchaseOrder(data) {
     return request("/api/v1/purchase-orders", {
