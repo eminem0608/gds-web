@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { brewApi } from "../api";
+import StockBrowserPage from "./StockBrowserPage.vue";
 
 const props = defineProps({
   permissions: { type: Array, default: () => [] },
@@ -67,6 +68,7 @@ const tabs = [
   { id: "inventory", label: "库存作业" },
   { id: "settlement", label: "对账导出" }
 ];
+tabs.splice(1, 0, { id: "stock", label: "库存" });
 const states = {
   draft: "草稿", submitted: "待审批", approved: "已批准", returned: "已退回",
   ordered: "已转订单", closed: "已关闭", cancelled: "已取消", none: "未提交",
@@ -792,7 +794,9 @@ onMounted(load);
     <div class="inventory-flow"><span>生产缺口</span><b>›</b><span>采购需求</span><b>›</b><span>我的任务审批</span><b>›</b><span>采购执行</span><b>›</b><span>到货质检</span><b>›</b><span>合格入库</span></div>
     <div class="inventory-tabs"><button v-for="item in tabs" :key="item.id" type="button" :class="{ active: tab === item.id }" @click="tab = item.id">{{ item.label }}</button><button v-if="tab !== 'stock'" class="inventory-tab-refresh" type="button" :disabled="loading" @click="load" aria-label="刷新当前数据">↻ 刷新</button></div>
 
-    <template v-if="tab === 'overview'">
+    <StockBrowserPage v-if="tab === 'stock'" />
+
+    <template v-else-if="tab === 'overview'">
       <div class="inventory-metric-grid"><div v-for="item in metrics" :key="item.label" class="inventory-metric"><span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.hint }}</small></div></div>
       <section class="inventory-section"><header><div><h3>分类库存</h3><p>不同单位不做无意义汇总，按原料种类查看数量与批次</p></div><span>{{ inventoryCategories.length }} 类</span></header><div class="inventory-category-grid"><button v-for="item in inventoryCategories" :key="item.category" type="button" @click="showCategoryInventory(item)"><span>{{ item.category_name }}</span><strong>{{ item.uom === '多单位' ? item.product_count + ' 种原料' : number(item.available,3) + ' ' + item.uom }}</strong><small>账面 {{ item.uom === '多单位' ? item.lot_count + ' 个批次' : number(item.on_hand,3) }} · 预占 {{ item.uom === '多单位' ? '按明细查看' : number(item.reserved,3) }}</small><em>查看 {{ item.product_count }} 种原料 / {{ item.lot_count }} 个批次 ›</em></button><div v-if="!inventoryCategories.length" class="inventory-empty">暂无库存分类数据</div></div></section>
       <section class="inventory-section"><header><div><h3>库存健康度</h3><p>按问题批次展示原因；可用库存指合格、未过期、未冻结且未被领料预占的数量</p></div></header><div class="stock-health"><button v-for="item in stockHealth" :key="item.key" type="button" @click="showHealthInventory(item)"><span>{{ item.label }}</span><strong>{{ item.value }} 个批次</strong><small>{{ item.hint }}</small><em>查看明细 ›</em></button></div></section>
