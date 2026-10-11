@@ -85,6 +85,55 @@ async function request(path, options = {}) {
 }
 
 
+async function requestWithMeta(path, options = {}) {
+  const { _retryOnCsrf = true, ...fetchOptions } = options;
+  const method = fetchOptions.method || "GET";
+  const headers = {
+    Accept: "application/json",
+    ...(fetchOptions.body ? { "Content-Type": "application/json" } : {}),
+    ...(method !== "GET" && csrfToken() ? { "X-CSRF-Token": csrfToken() } : {}),
+    ...(fetchOptions.headers || {})
+  };
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...fetchOptions,
+      method,
+      headers,
+      credentials: "include",
+      signal: fetchOptions.signal || controller.signal
+    });
+  } catch (cause) {
+    window.clearTimeout(timeoutId);
+    if (cause?.name === "AbortError") throw new ApiError("REQUEST_TIMEOUT", "请求超时，请检查服务连接后重试。", 0);
+    throw cause;
+  }
+  let payload;
+  const responseText = await response.text();
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    window.clearTimeout(timeoutId);
+    throw new ApiError("INVALID_RESPONSE", responseText?.trim() || "Service returned an empty or invalid response.", response.status);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+  if (!response.ok || payload.error) {
+    const error = payload.error || {};
+    throw new ApiError(
+      error.code || `HTTP_${response.status}`,
+      error.message || "请求失败。",
+      response.status,
+      error.details || {},
+      payload.request_id || ""
+    );
+  }
+  return { data: payload.data || [], meta: payload.meta || {} };
+}
+
+
 export const brewApi = {
   async login(login, password) {
     const data = await request("/api/v1/auth/login", {
@@ -228,7 +277,7 @@ export const brewApi = {
     });
   },
   listPurchaseRequisitions(params = {}) {
-    return request(`/api/v1/purchase-requisitions?${new URLSearchParams(params).toString()}`);
+    return requestWithMeta(`/api/v1/purchase-requisitions?${new URLSearchParams(params).toString()}`);
   },
   getPurchaseRequisition(id) {
     return request(`/api/v1/purchase-requisitions/${id}`);
@@ -265,7 +314,7 @@ export const brewApi = {
     });
   },
   listPurchaseOrders(params = {}) {
-    return request(`/api/v1/purchase-orders?${new URLSearchParams(params).toString()}`);
+    return requestWithMeta(`/api/v1/purchase-orders?${new URLSearchParams(params).toString()}`);
   },
   getPurchaseOrder(id) {
     return request(`/api/v1/purchase-orders/${id}`);
@@ -306,7 +355,17 @@ export const brewApi = {
     });
   },
   listReceipts(params = {}) {
-    return request(`/api/v1/receipts?${new URLSearchParams(params).toString()}`);
+    return requestWithMeta(`/api/v1/receipts?${new URLSearchParams(params).toString()}`);
+  },
+  getReceipt(id) {
+    return request(`/api/v1/receipts/${id}`);
+  },
+  updateReceipt(id, data) {
+    return request(`/api/v1/receipts/${id}`, {
+      method: "PATCH",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
   },
   createReceipt(data) {
     return request("/api/v1/receipts", {
@@ -323,7 +382,10 @@ export const brewApi = {
     });
   },
   listQualityInspections(params = {}) {
-    return request(`/api/v1/quality-inspections?${new URLSearchParams(params).toString()}`);
+    return requestWithMeta(`/api/v1/quality-inspections?${new URLSearchParams(params).toString()}`);
+  },
+  getQualityInspection(id) {
+    return request(`/api/v1/quality-inspections/${id}`);
   },
   createQualityInspection(data) {
     return request("/api/v1/quality-inspections", {
@@ -345,6 +407,36 @@ export const brewApi = {
       headers: { "Idempotency-Key": idempotencyKey() },
       body: JSON.stringify(data)
     });
+  },
+  listPurchaseReturns(params = {}) {
+    return requestWithMeta(`/api/v1/purchase-returns?${new URLSearchParams(params).toString()}`);
+  },
+  getPurchaseReturn(id) {
+    return request(`/api/v1/purchase-returns/${id}`);
+  },
+  createPurchaseReturn(data) {
+    return request("/api/v1/purchase-returns", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  updatePurchaseReturn(id, data) {
+    return request(`/api/v1/purchase-returns/${id}`, {
+      method: "PATCH",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  purchaseReturnAction(id, action, data) {
+    return request(`/api/v1/purchase-returns/${id}/${action}`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
+  getReturnableLines(orderId) {
+    return request(`/api/v1/purchase-orders/${orderId}/returnable-lines`);
   },
   listMaterialRequisitions(params = {}) {
     return request(`/api/v1/material-requisitions?${new URLSearchParams(params).toString()}`);

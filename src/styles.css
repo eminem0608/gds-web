@@ -1536,6 +1536,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
 .shortage-filters { grid-template-columns: repeat(3, minmax(130px, .8fr)) repeat(3, minmax(150px, 1fr)) minmax(330px, 1.6fr) auto auto; }
 .requisition-filters { grid-template-columns: repeat(3, minmax(150px, 1fr)) repeat(3, minmax(130px, .75fr)) minmax(310px, 1.5fr) auto auto; }
 .order-filters { grid-template-columns: minmax(190px, 1fr) minmax(180px, 1fr) minmax(145px, .7fr) auto auto; }
+.receipt-filters, .inspection-filters, .return-filters { grid-template-columns: minmax(180px, 1fr) minmax(150px, 1fr) minmax(120px, .7fr) minmax(120px, .7fr) auto auto; }
 .date-filter { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto minmax(120px, 1fr); align-items: center; gap: 7px; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .date-filter b { font-weight: 400; }
 .shortage-table { min-width: 1420px; }
@@ -1650,7 +1651,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
 .export-history div { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 12px; }
 .export-history a { color: var(--accent-gold); }
 @media (max-width: 1200px) {
-  .inventory-filters, .shortage-filters, .requisition-filters, .order-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .inventory-filters, .shortage-filters, .requisition-filters, .order-filters, .receipt-filters, .inspection-filters, .return-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .date-filter { grid-column: span 2; }
 }
 @media (max-width: 980px) {
@@ -1679,7 +1680,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
   .inventory-modal-body { grid-template-columns: 1fr; padding: 16px; }
   .inventory-modal-body .wide { grid-column: auto; }
   .quality-line, .receipt-line, .order-line, .modal-line, .requisition-edit-line { grid-template-columns: 1fr; }
-  .inventory-filters, .shortage-filters, .requisition-filters, .order-filters { grid-template-columns: 1fr; }
+  .inventory-filters, .shortage-filters, .requisition-filters, .order-filters, .receipt-filters, .inspection-filters, .return-filters { grid-template-columns: 1fr; }
   .date-filter { grid-column: auto; grid-template-columns: 1fr 1fr; white-space: normal; }
   .date-filter span { grid-column: 1 / -1; }
   .date-filter b { display: none; }
