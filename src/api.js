@@ -239,6 +239,9 @@ export const brewApi = {
   listInventoryLots(params = {}) {
     return request(`/api/v1/inventory/lots?${new URLSearchParams(params).toString()}`);
   },
+  getInventoryLot(id) {
+    return request(`/api/v1/inventory/lots/${id}`);
+  },
   listInventoryMovements(params = {}) {
     return request(`/api/v1/inventory/movements?${new URLSearchParams(params).toString()}`);
   },

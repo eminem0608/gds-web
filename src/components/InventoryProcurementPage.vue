@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { brewApi } from "../api";
 import StockBrowserPage from "./StockBrowserPage.vue";
+import ProductionPlanDetail from "./ProductionPlanDetail.vue";
 
 const props = defineProps({
   permissions: { type: Array, default: () => [] },
@@ -14,6 +15,8 @@ const saving = ref(false);
 const error = ref("");
 const modal = ref("");
 const modalError = ref("");
+const selectedPlanId = ref(null);
+const selectedLot = ref(null);
 const draft = reactive({});
 
 const summary = ref({ totals: {} });
@@ -42,11 +45,11 @@ const lotFilters = reactive({
 });
 const countFilters = reactive({ keyword: "", mode: "all" });
 const shortageFilters = reactive({
-  category_group: "", category_code: "", material_id: "", material_name: "",
-  plan_no: "", product_name: "", date_from: "", date_to: ""
+  category_group: "", category_code: "",
+  plan_no: "", date_from: "", date_to: ""
 });
 const requisitionFilters = reactive({
-  keyword: "", supplier_name: "", requester_name: "", factory_id: "",
+  keyword: "", requester_name: "", factory_id: "",
   request_type: "", state: "", date_from: "", date_to: ""
 });
 const orderFilters = reactive({
@@ -780,6 +783,21 @@ async function openReceiptDetail(receipt) {
     emit("toast", cause.message || "收货单详情加载失败");
   }
 }
+async function openLotDetail(lotId) {
+  try {
+    selectedLot.value = await brewApi.getInventoryLot(lotId);
+  } catch (cause) {
+    emit("toast", cause.message || "库存批次加载失败");
+  }
+}
+async function openMovementSource(source) {
+  if (!source?.id) return;
+  if (source.model === "brew.receipt") await openReceiptDetail(source);
+  else if (source.model === "brew.purchase.return") await openReturnDetail(source);
+  else if (source.model === "brew.production.plan") selectedPlanId.value = source.id;
+  else return;
+  selectedLot.value = null;
+}
 async function openReceiptEdit(receipt) {
   try {
     const current = await brewApi.getReceipt(receipt.id);
@@ -1264,13 +1282,8 @@ watch(tab, (newTab) => {
 
 <template>
   <div class="inventory-workbench">
-    <div class="inventory-hero">
-      <div><span class="inventory-eyebrow">库存采购工作台</span><h2>从缺料到入库，一条主线处理</h2><p>普通采购来自生产缺口；紧急采购单独标识并强制审批。库存余额只由业务单据更新。</p></div>
-      <div class="inventory-hero-actions"><button class="icon-action" type="button" title="刷新" aria-label="刷新" :disabled="loading" @click="load">↻</button></div>
-    </div>
-    <div v-if="error" class="master-error inventory-error">{{ error }}</div>
-    <div class="inventory-flow"><span>生产缺口</span><b>›</b><span>采购需求</span><b>›</b><span>我的任务审批</span><b>›</b><span>采购执行</span><b>›</b><span>到货质检</span><b>›</b><span>合格入库</span></div>
     <div class="inventory-tabs"><button v-for="item in tabs" :key="item.id" type="button" :class="{ active: tab === item.id }" @click="tab = item.id">{{ item.label }}</button><button v-if="tab !== 'stock'" class="inventory-tab-refresh" type="button" :disabled="loading" @click="load" aria-label="刷新当前数据">↻ 刷新</button></div>
+    <div v-if="error" class="master-error inventory-error">{{ error }}</div>
 
     <StockBrowserPage v-if="tab === 'stock'" />
 
@@ -1285,15 +1298,12 @@ watch(tab, (newTab) => {
       <div class="procurement-filters shortage-filters">
         <select v-model="shortageFilters.category_group" @change="shortageFilters.category_code = ''"><option value="">全部原料品类</option><option v-for="item in materialGroupOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
         <select v-model="shortageFilters.category_code"><option value="">全部原料种类</option><option v-for="item in materialTypeOptions" :key="item.id" :value="item.code">{{ item.name }}</option></select>
-        <select v-model="shortageFilters.material_id"><option value="">全部原料</option><option v-for="item in materials" :key="item.id" :value="item.product_variant_id">{{ item.name }}</option></select>
-        <input v-model.trim="shortageFilters.material_name" placeholder="原料名称" @keyup.enter="loadSourcePlans">
         <input v-model.trim="shortageFilters.plan_no" placeholder="生产计划编号" @keyup.enter="loadSourcePlans">
-        <input v-model.trim="shortageFilters.product_name" placeholder="产品名称" @keyup.enter="loadSourcePlans">
         <label class="date-filter"><span>生产时间</span><input v-model="shortageFilters.date_from" type="date" aria-label="生产开始日期" @click="openDatePicker"><b>至</b><input v-model="shortageFilters.date_to" type="date" aria-label="生产结束日期" @click="openDatePicker"></label>
         <button class="btn btn-sm btn-outline" type="button" @click="resetShortageFilters">重置</button><button class="btn btn-sm btn-primary" type="button" :disabled="shortageLoading" @click="loadSourcePlans">查询</button>
       </div>
       <div class="work-table-wrap"><table class="work-table shortage-table"><thead><tr><th><input type="checkbox" :checked="requestableShortageRows.length && selectedShortageRows.length === requestableShortageRows.length" @change="toggleAllShortages"></th><th>原料品类 / 种类</th><th>原料名称</th><th>生产计划 / 产品</th><th>生产时间</th><th>计划需求</th><th>可分配库存</th><th>生产缺口</th><th>已生成需求</th><th>状态</th></tr></thead><tbody>
-        <tr v-for="item in paginatedShortageRows" :key="item.request_key"><td><input v-model="selectedShortages" type="checkbox" :value="item.request_key" :disabled="Number(item.requestable_qty) <= 0"></td><td>{{ item.category?.group_name || '-' }}<small>{{ item.category?.name || '-' }}</small></td><td><strong>{{ item.product?.name }}</strong><small>{{ item.product?.brand || '无品牌' }} · {{ item.product?.specification || '未设置规格' }}</small></td><td><strong>{{ item.plan.name }}</strong><small>{{ item.plan.product?.name }} · {{ item.plan.factory?.name }}</small></td><td>{{ dateTime(item.plan.planned_start) }}<small>至 {{ dateTime(item.plan.planned_end) }}</small></td><td>{{ number(item.required,3) }} {{ item.uom }}</td><td>{{ number(item.allocated,3) }}</td><td><strong>{{ number(item.shortage,3) }}</strong><small>本次可申请 {{ number(item.requestable_qty,3) }}</small></td><td>{{ number(item.requested_qty,3) }}</td><td><span class="state-pill" :data-state="item.request_status">{{ requestStatusText(item.request_status) }}</span></td></tr>
+        <tr v-for="item in paginatedShortageRows" :key="item.request_key"><td><input v-model="selectedShortages" type="checkbox" :value="item.request_key" :disabled="Number(item.requestable_qty) <= 0"></td><td>{{ item.category?.group_name || '-' }}<small>{{ item.category?.name || '-' }}</small></td><td><strong>{{ item.product?.name }}</strong><small>{{ item.product?.brand || '无品牌' }} · {{ item.product?.specification || '未设置规格' }}</small></td><td><button class="record-link record-link-main" type="button" @click="selectedPlanId = item.plan.id">{{ item.plan.name }} · {{ item.plan.product?.name }}</button><small>{{ item.plan.factory?.name }}</small></td><td>{{ dateTime(item.plan.planned_start) }}<small>至 {{ dateTime(item.plan.planned_end) }}</small></td><td>{{ number(item.required,3) }} {{ item.uom }}</td><td>{{ number(item.allocated,3) }}</td><td><strong>{{ number(item.shortage,3) }}</strong><small>本次可申请 {{ number(item.requestable_qty,3) }}</small></td><td><div v-if="item.linked_requisitions?.length" class="record-links"><button v-for="req in item.linked_requisitions" :key="req.id" class="record-link" type="button" @click="openRequisitionDetail(req)">{{ req.name }}<small>{{ number(req.quantity,3) }} · {{ stateText(req.state) }}</small></button></div><span v-else>{{ number(item.requested_qty,3) }}</span></td><td><span class="state-pill" :data-state="item.request_status">{{ requestStatusText(item.request_status) }}</span></td></tr>
         <tr v-if="!paginatedShortageRows.length"><td colspan="10" class="inventory-empty">当前条件下没有生产缺口</td></tr>
       </tbody></table></div>
       <footer class="proc-pagination">
@@ -1311,7 +1321,6 @@ watch(tab, (newTab) => {
       <header><div><h3>采购需求</h3><p>查看需求从发起、审批到关联采购单的完整进展，审批操作统一在“我的任务”处理</p></div><div class="section-actions"><button v-if="canPurchase" class="btn btn-sm btn-outline" @click="openEmergency">新建紧急采购需求</button><button v-if="canPurchase" class="btn btn-sm btn-primary" @click="openOrder()">从需求生成采购单</button></div></header>
       <div class="procurement-filters requisition-filters">
         <input v-model.trim="requisitionFilters.keyword" placeholder="需求单号 / 原料名称" @keyup.enter="requisitionPage=1;loadRequisitions()">
-        <input v-model.trim="requisitionFilters.supplier_name" placeholder="建议供应商" @keyup.enter="requisitionPage=1;loadRequisitions()">
         <input v-model.trim="requisitionFilters.requester_name" placeholder="申请人" @keyup.enter="requisitionPage=1;loadRequisitions()">
         <select v-model="requisitionFilters.factory_id" @change="requisitionPage=1;loadRequisitions()"><option value="">全部厂区</option><option v-for="item in factories" :key="item.id" :value="item.id">{{ item.name }}</option></select>
         <select v-model="requisitionFilters.request_type" @change="requisitionPage=1;loadRequisitions()"><option value="">全部来源</option><option value="planned">计划缺料</option><option value="emergency">紧急采购</option></select>
@@ -1320,7 +1329,7 @@ watch(tab, (newTab) => {
         <button class="btn btn-sm btn-outline" @click="resetRequisitionFilters">重置</button>
         <button class="btn btn-sm btn-primary" :disabled="requisitionLoading" @click="requisitionPage=1;loadRequisitions()">查询</button>
       </div>
-      <div class="work-table-wrap"><table class="work-table requisition-table"><thead><tr><th>序号</th><th>采购需求单</th><th>来源</th><th>申请人 / 厂区</th><th>需求日期</th><th>物料</th><th>当前进度</th><th>关联采购单</th><th>操作</th></tr></thead><tbody><tr v-for="(item,index) in paginatedRequisitions" :key="item.id"><td>{{ (requisitionPage - 1) * requisitionPageSize + index + 1 }}</td><td><strong>{{ item.name }}</strong><small>{{ item.preferred_supplier?.name || '未指定建议供应商' }}</small></td><td><span class="source-badge" :class="{ emergency: item.request_type === 'emergency' }">{{ requestType(item) }}</span><small>{{ item.emergency_reason || item.reason || '-' }}</small></td><td>{{ item.requester?.name || '-' }}<small>{{ item.factory?.name || '-' }}</small></td><td>{{ item.need_date || '-' }}</td><td><strong>{{ item.lines.length }} 项</strong><small>{{ item.lines.map(line => line.product?.name).join('、') }}</small></td><td><span class="state-pill" :data-state="item.state">{{ stateText(item.state) }}</span><small v-if="item.return_reason">退回：{{ item.return_reason }}</small></td><td>{{ item.orders?.length ? item.orders.map(order => order.name).join('、') : '尚未生成' }}<small v-if="item.orders?.length">{{ item.orders.map(order => receiptStateText(order.receipt_state)).join('、') }}</small></td><td class="row-actions"><button class="btn btn-xs btn-outline" @click="openRequisitionDetail(item)">查看进展</button><button v-if="canPurchase && ['draft','returned'].includes(item.state)" class="btn btn-xs btn-outline" @click="openRequisitionEdit(item)">编辑</button><button v-if="canPurchase && ['draft','returned'].includes(item.state)" class="btn btn-xs btn-primary" @click="requisitionAction(item,'submit')">提交审批</button><button v-if="canPurchase && item.state === 'approved' && item.lines.some(line => remaining(line) > 0)" class="btn btn-xs btn-primary" @click="openOrder(item)">生成采购单</button></td></tr><tr v-if="!paginatedRequisitions.length"><td colspan="9" class="inventory-empty">暂无采购需求</td></tr></tbody></table></div>
+      <div class="work-table-wrap"><table class="work-table requisition-table"><thead><tr><th>序号</th><th>采购需求单</th><th>来源</th><th>申请人 / 厂区</th><th>需求日期</th><th>物料</th><th>当前进度</th><th>关联采购单</th><th>操作</th></tr></thead><tbody><tr v-for="(item,index) in paginatedRequisitions" :key="item.id"><td>{{ (requisitionPage - 1) * requisitionPageSize + index + 1 }}</td><td><button class="record-link record-link-main" type="button" @click="openRequisitionDetail(item)">{{ item.name }}</button><small>{{ item.preferred_supplier?.name || '未指定建议供应商' }}</small></td><td><span class="source-badge" :class="{ emergency: item.request_type === 'emergency' }">{{ requestType(item) }}</span><small>{{ item.emergency_reason || item.reason || '-' }}</small></td><td>{{ item.requester?.name || '-' }}<small>{{ item.factory?.name || '-' }}</small></td><td>{{ item.need_date || '-' }}</td><td><strong>{{ item.lines.length }} 项</strong><small>{{ item.lines.map(line => line.product?.name).join('、') }}</small></td><td><span class="state-pill" :data-state="item.state">{{ stateText(item.state) }}</span><small v-if="item.return_reason">退回：{{ item.return_reason }}</small></td><td><div v-if="item.orders?.length" class="record-links"><button v-for="order in item.orders" :key="order.id" class="record-link" type="button" @click="openOrderDetail(order)">{{ order.name }}<small>{{ receiptStateText(order.receipt_state) }}</small></button></div><span v-else>尚未生成</span></td><td class="row-actions"><button class="btn btn-xs btn-outline" @click="openRequisitionDetail(item)">查看进展</button><button v-if="canPurchase && ['draft','returned'].includes(item.state)" class="btn btn-xs btn-outline" @click="openRequisitionEdit(item)">编辑</button><button v-if="canPurchase && ['draft','returned'].includes(item.state)" class="btn btn-xs btn-primary" @click="requisitionAction(item,'submit')">提交审批</button><button v-if="canPurchase && item.state === 'approved' && item.lines.some(line => remaining(line) > 0)" class="btn btn-xs btn-primary" @click="openOrder(item)">生成采购单</button></td></tr><tr v-if="!paginatedRequisitions.length"><td colspan="9" class="inventory-empty">暂无采购需求</td></tr></tbody></table></div>
       <footer class="proc-pagination">
         <span>共 {{ requisitionTotal }} 条</span>
         <select :value="requisitionPageSize" @change="changeRequisitionPageSize($event.target.value)">
@@ -1336,7 +1345,7 @@ watch(tab, (newTab) => {
       <header><div><h3>采购执行</h3><p>跟踪已生成采购单的审批、下单、收货与关闭状态</p></div><div class="section-actions"><button v-if="canPurchase" class="btn btn-sm btn-primary" @click="openOrder()">新增采购单</button><button v-if="canExport" class="btn btn-sm btn-outline" @click="createExport">导出</button></div></header>
       <div class="procurement-filters order-filters"><input v-model.trim="orderFilters.supplier_name" placeholder="供应商名称" @keyup.enter="orderPage=1;loadOrders()"><input v-model.trim="orderFilters.order_no" placeholder="采购单号" @keyup.enter="orderPage=1;loadOrders()"><select v-model="orderFilters.receipt_state" @change="orderPage=1;loadOrders()"><option value="">全部收货状态</option><option value="not_received">未收货</option><option value="partial">部分收货</option><option value="receiving">收货处理中</option><option value="received">已收货</option></select><button class="btn btn-sm btn-outline" @click="resetOrderFilters">重置</button><button class="btn btn-sm btn-primary" :disabled="orderLoading" @click="orderPage=1;loadOrders()">查询</button></div>
       <div class="work-table-wrap"><table class="work-table purchase-order-table"><thead><tr><th>序号</th><th>采购需求单号</th><th>采购单号</th><th>供应商</th><th>下单人</th><th>采购金额</th><th>预期到货</th><th>下单日期</th><th>审批状态</th><th>收货状态</th><th>操作</th></tr></thead><tbody>
-        <tr v-for="(item,index) in paginatedOrders" :key="item.id"><td>{{ (orderPage - 1) * orderPageSize + index + 1 }}</td><td>{{ item.requisitions?.map(req => req.name).join('、') || '-' }}<small>{{ orderType(item) }}</small></td><td><strong>{{ item.name }}</strong><small>{{ stateText(item.state) }}</small></td><td>{{ item.supplier?.name || '-' }}<small>{{ item.supplier?.code || '-' }}</small></td><td>{{ item.purchaser?.name || '-' }}</td><td><strong>{{ number(item.amount_total) }}</strong><small>{{ item.currency }}</small></td><td>{{ item.expected_arrival_date || '-' }}</td><td>{{ dateTime(item.order_date) }}</td><td><span class="state-pill" :data-state="item.approval_state">{{ stateText(item.approval_state) }}</span></td><td><span class="state-pill" :data-state="item.receipt_state">{{ receiptStateText(item.receipt_state) }}</span></td><td class="row-actions"><button class="btn btn-xs btn-outline" @click="openOrderDetail(item)">查看详情</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'none'" class="btn btn-xs btn-outline" @click="openOrderEdit(item)">编辑</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'none'" class="btn btn-xs btn-primary" @click="orderAction(item,'submit')">提交审批</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'returned'" class="btn btn-xs btn-primary" @click="openOrderEdit(item)">编辑并重新提交</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'approved'" class="btn btn-xs btn-primary" @click="orderAction(item,'place')">正式下单</button><button v-if="canWarehouse && item.can_receive" class="btn btn-xs btn-outline" @click="openReceipt(item)">登记收货</button><button v-if="canPurchase && item.state === 'purchase'" class="btn btn-xs btn-outline" @click="orderAction(item,'close')">关闭</button></td></tr>
+        <tr v-for="(item,index) in paginatedOrders" :key="item.id"><td>{{ (orderPage - 1) * orderPageSize + index + 1 }}</td><td><div v-if="item.requisitions?.length" class="record-links"><button v-for="req in item.requisitions" :key="req.id" class="record-link" type="button" @click="openRequisitionDetail(req)">{{ req.name }}</button></div><span v-else>-</span><small>{{ orderType(item) }}</small></td><td><button class="record-link record-link-main" type="button" @click="openOrderDetail(item)">{{ item.name }}</button><small>{{ stateText(item.state) }}</small></td><td>{{ item.supplier?.name || '-' }}<small>{{ item.supplier?.code || '-' }}</small></td><td>{{ item.purchaser?.name || '-' }}</td><td><strong>{{ number(item.amount_total) }}</strong><small>{{ item.currency }}</small></td><td>{{ item.expected_arrival_date || '-' }}</td><td>{{ dateTime(item.order_date) }}</td><td><span class="state-pill" :data-state="item.approval_state">{{ stateText(item.approval_state) }}</span></td><td><span class="state-pill" :data-state="item.receipt_state">{{ receiptStateText(item.receipt_state) }}</span></td><td class="row-actions"><button class="btn btn-xs btn-outline" @click="openOrderDetail(item)">查看详情</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'none'" class="btn btn-xs btn-outline" @click="openOrderEdit(item)">编辑</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'none'" class="btn btn-xs btn-primary" @click="orderAction(item,'submit')">提交审批</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'returned'" class="btn btn-xs btn-primary" @click="openOrderEdit(item)">编辑并重新提交</button><button v-if="canPurchase && ['draft','sent'].includes(item.state) && item.approval_state === 'approved'" class="btn btn-xs btn-primary" @click="orderAction(item,'place')">正式下单</button><button v-if="canWarehouse && item.can_receive" class="btn btn-xs btn-outline" @click="openReceipt(item)">登记收货</button><button v-if="canPurchase && item.state === 'purchase'" class="btn btn-xs btn-outline" @click="orderAction(item,'close')">关闭</button></td></tr>
         <tr v-if="!paginatedOrders.length"><td colspan="11" class="inventory-empty">暂无符合条件的采购单</td></tr>
       </tbody></table></div>
       <footer class="proc-pagination">
@@ -1358,7 +1367,7 @@ watch(tab, (newTab) => {
           <tr v-for="(item,index) in paginatedReceipts" :key="item.id">
             <td>{{ (receiptPage - 1) * receiptPageSize + index + 1 }}</td>
             <td><strong>{{ item.name }}</strong></td>
-            <td>{{ item.purchase_order?.name || '-' }}</td>
+            <td><button v-if="item.purchase_order" class="record-link" type="button" @click="openOrderDetail(item.purchase_order)">{{ item.purchase_order.name }}</button><span v-else>-</span></td>
             <td>{{ item.supplier?.name || '-' }}<small>{{ item.supplier?.code || '' }}</small></td>
             <td>{{ item.factory?.name || '-' }}</td>
             <td>总 {{ number(item.total_received,3) }}<small>合格 {{ number(item.total_qualified,3) }} / 不合格 {{ number(item.total_rejected,3) }}</small></td>
@@ -1390,7 +1399,7 @@ watch(tab, (newTab) => {
           <tr v-for="(item,index) in paginatedInspections" :key="item.id">
             <td>{{ (inspectionPage - 1) * inspectionPageSize + index + 1 }}</td>
             <td><strong>{{ item.name }}</strong></td>
-            <td>{{ item.receipt_name || '-' }}</td>
+            <td><button v-if="item.receipt_id" class="record-link" type="button" @click="openReceiptDetail({ id: item.receipt_id })">{{ item.receipt_name }}</button><span v-else>-</span></td>
             <td>{{ item.supplier?.name || '-' }}</td>
             <td>合格 {{ number(item.total_qualified || item.lines?.reduce((n,l)=>n+Number(l.qualified_qty||0),0),3) }} / 不合格 {{ number(item.total_rejected || item.lines?.reduce((n,l)=>n+Number(l.rejected_qty||0),0),3) }}</td>
             <td><span class="state-pill" :data-state="item.state">{{ stateText(item.state) }}</span></td>
@@ -1419,8 +1428,8 @@ watch(tab, (newTab) => {
           <tr v-for="(item,index) in paginatedReturns" :key="item.id">
             <td>{{ (returnPage - 1) * returnPageSize + index + 1 }}</td>
             <td><strong>{{ item.name }}</strong></td>
-            <td>{{ item.purchase_order?.name || '-' }}</td>
-            <td>{{ item.receipt_name || '-' }}</td>
+            <td><button v-if="item.purchase_order" class="record-link" type="button" @click="openOrderDetail(item.purchase_order)">{{ item.purchase_order.name }}</button><span v-else>-</span></td>
+            <td><button v-if="item.receipt_id" class="record-link" type="button" @click="openReceiptDetail({ id: item.receipt_id })">{{ item.receipt_name }}</button><span v-else>-</span></td>
             <td>{{ item.supplier?.name || '-' }}</td>
             <td>¥{{ number(item.amount_total) }}</td>
             <td>{{ number(item.lines?.reduce((s,l)=>s+Number(l.return_qty||0),0),3) }}</td>
@@ -1490,12 +1499,27 @@ watch(tab, (newTab) => {
         <div class="wide order-detail-summary"><div><span>采购单号</span><strong>{{ draft.order.name }}</strong></div><div><span>采购需求单</span><strong>{{ draft.order.requisitions?.map(item => item.name).join('、') || '-' }}</strong></div><div><span>供应商</span><strong>{{ draft.order.supplier?.name }}</strong><small>{{ draft.order.supplier?.code || '-' }}</small></div><div><span>收货工厂</span><strong>{{ draft.order.factory?.name || '-' }}</strong></div><div><span>下单人 / 日期</span><strong>{{ draft.order.purchaser?.name || '-' }}</strong><small>{{ dateTime(draft.order.order_date) }}</small></div><div><span>采购金额</span><strong>{{ number(draft.order.amount_total) }} {{ draft.order.currency }}</strong></div><div><span>预期到货日期</span><strong>{{ draft.order.expected_arrival_date || '-' }}</strong></div><div><span>当前状态</span><strong>{{ stateText(draft.order.state) }}</strong><small>审批 {{ stateText(draft.order.approval_state) }} · {{ receiptStateText(draft.order.receipt_state) }}</small></div></div>
         <button v-if="canPurchase && ['none','returned'].includes(draft.order.approval_state) && ['draft','sent'].includes(draft.order.state)" class="btn btn-sm btn-primary wide" type="button" @click="openOrderEdit(draft.order)">{{ draft.order.approval_state === 'returned' ? '编辑并重新提交' : '编辑采购单' }}</button>
         <section class="wide order-detail-block"><header><h4>采购单明细</h4><span>{{ draft.order.lines.length }} 项</span></header><div class="work-table-wrap"><table class="work-table"><thead><tr><th>序号</th><th>原料</th><th>品牌</th><th>包装</th><th>件数</th><th>采购数量</th><th>采购单价</th><th>采购金额</th><th>预计到货</th></tr></thead><tbody><tr v-for="(line,index) in draft.order.lines" :key="line.id"><td>{{ index + 1 }}</td><td><strong>{{ line.product?.name }}</strong></td><td>{{ line.product?.brand || '-' }}</td><td>{{ line.package_spec || line.product?.specification || '-' }}</td><td>{{ number(line.package_count,0) }}</td><td>{{ number(line.quantity,3) }} {{ line.uom?.name }}</td><td>{{ number(line.price_unit) }}</td><td>{{ number(line.subtotal) }}</td><td>{{ dateTime(line.planned_date) }}</td></tr></tbody></table></div></section>
+        <section class="wide order-detail-block">
+          <header><h4>来源采购需求</h4><span>{{ draft.order.requisitions?.length || 0 }} 张</span></header>
+          <div class="linked-orders"><button v-for="req in draft.order.requisitions" :key="req.id" type="button" @click="openRequisitionDetail(req)"><strong>{{ req.name }}</strong><small>查看需求明细与生产计划来源</small></button></div>
+        </section>
+        <section class="wide order-detail-block">
+          <header><h4>收货、质检与退货进展</h4><span>{{ draft.order.receipts?.length || 0 }} 张收货单 · {{ draft.order.returns?.length || 0 }} 张退货单</span></header>
+          <div class="linked-orders">
+            <template v-for="receipt in draft.order.receipts" :key="receipt.id">
+              <button type="button" @click="openReceiptDetail(receipt)"><strong>{{ receipt.name }}</strong><span>{{ receipt.state === 'done' ? '已入库' : stateText(receipt.state) }}</span><small>{{ receipt.completed_at ? '入库时间：' + dateTime(receipt.completed_at) : '查看收货明细与库存批次' }}</small></button>
+              <button v-if="receipt.inspection_id" type="button" @click="openInspectionDetail({ id: receipt.inspection_id })"><strong>{{ receipt.inspection_name }}</strong><span>质检 {{ stateText(receipt.inspection_state) }}</span><small>来源收货单 {{ receipt.name }}</small></button>
+            </template>
+            <button v-for="returnRecord in draft.order.returns" :key="'return-' + returnRecord.id" type="button" @click="openReturnDetail(returnRecord)"><strong>{{ returnRecord.name }}</strong><span>{{ returnRecord.state === 'done' ? '已退货出库' : stateText(returnRecord.state) }}</span><small>点击查看退货明细</small></button>
+          </div>
+          <p v-if="!draft.order.receipts?.length && !draft.order.returns?.length" class="inventory-empty">尚未登记收货或退货</p>
+        </section>
         <section class="wide order-detail-block"><header><h4>完整审批流水</h4><span>{{ stateText(draft.order.approval_state) }}</span></header><div v-if="draft.order.approval_history?.length" class="approval-timeline"><div v-for="(step,index) in draft.order.approval_history" :key="step.cycle + '-' + index" :data-state="step.state"><i></i><div><strong>第 {{ step.cycle }} 轮 · {{ step.role_label || approvalRoleText(step.role_code) }}</strong><span>{{ historyStateText(step) }}</span><small>{{ approvalActorText(step) }} · {{ dateTime(step.acted_at) }}</small><p v-if="step.comment">{{ step.comment }}</p></div></div></div><div v-else class="inventory-empty">采购单尚未提交审批</div></section>
       </template>
       <template v-else-if="modal === 'requisition-detail'">
         <div class="wide order-detail-summary"><div><span>采购需求单</span><strong>{{ draft.requisition.name }}</strong></div><div><span>来源</span><strong>{{ requestType(draft.requisition) }}</strong><small>{{ draft.requisition.emergency_reason || draft.requisition.reason || '-' }}</small></div><div><span>申请人 / 厂区</span><strong>{{ draft.requisition.requester?.name || '-' }}</strong><small>{{ draft.requisition.factory?.name || '-' }}</small></div><div><span>需求日期</span><strong>{{ draft.requisition.need_date || '-' }}</strong></div><div><span>建议供应商</span><strong>{{ draft.requisition.preferred_supplier?.name || '未指定' }}</strong></div><div><span>当前状态</span><strong>{{ stateText(draft.requisition.state) }}</strong><small v-if="draft.requisition.return_reason">退回：{{ draft.requisition.return_reason }}</small></div><div><span>关联采购单</span><strong>{{ draft.requisition.orders?.length || 0 }} 张</strong></div><div><span>未下单明细</span><strong>{{ draft.requisition.lines.filter(line => remaining(line) > 0).length }} 项</strong></div></div>
         <button v-if="canPurchase && ['draft','returned'].includes(draft.requisition.state)" class="btn btn-sm btn-primary wide" type="button" @click="openRequisitionEdit(draft.requisition)">编辑采购需求</button>
-        <section class="wide order-detail-block"><header><h4>采购需求明细</h4><span>{{ draft.requisition.lines.length }} 项</span></header><div class="work-table-wrap"><table class="work-table"><thead><tr><th>原料</th><th>申请数量</th><th>批准数量</th><th>已下单</th><th>未下单</th></tr></thead><tbody><tr v-for="line in draft.requisition.lines" :key="line.id"><td><strong>{{ line.product?.name }}</strong></td><td>{{ number(line.requested_qty,3) }} {{ line.uom?.name }}</td><td>{{ number(line.approved_qty,3) }}</td><td>{{ number(line.ordered_qty,3) }}</td><td><strong>{{ number(remaining(line),3) }}</strong></td></tr></tbody></table></div></section>
+        <section class="wide order-detail-block"><header><h4>采购需求明细</h4><span>{{ draft.requisition.lines.length }} 项</span></header><div class="work-table-wrap"><table class="work-table"><thead><tr><th>原料</th><th>生产计划来源</th><th>申请数量</th><th>批准数量</th><th>已下单</th><th>未下单</th></tr></thead><tbody><tr v-for="line in draft.requisition.lines" :key="line.id"><td><strong>{{ line.product?.name }}</strong></td><td><div v-if="line.allocations?.length" class="record-links"><button v-for="allocation in line.allocations" :key="allocation.plan_id" class="record-link" type="button" @click="selectedPlanId = allocation.plan_id">{{ allocation.plan_name }}<small>缺口 {{ number(allocation.shortage_qty,3) }}</small></button></div><span v-else>紧急采购</span></td><td>{{ number(line.requested_qty,3) }} {{ line.uom?.name }}</td><td>{{ number(line.approved_qty,3) }}</td><td>{{ number(line.ordered_qty,3) }}</td><td><strong>{{ number(remaining(line),3) }}</strong></td></tr></tbody></table></div></section>
         <section v-if="draft.requisition.orders?.length" class="wide order-detail-block"><header><h4>关联采购单</h4><span>{{ draft.requisition.orders.length }} 张</span></header><div class="linked-orders"><button v-for="order in draft.requisition.orders" :key="order.id" type="button" @click="openOrderDetail(order)"><strong>{{ order.name }}</strong><span>{{ order.supplier?.name || '-' }}</span><small>审批 {{ stateText(order.approval_state) }} · {{ receiptStateText(order.receipt_state) }}</small></button></div></section>
         <section class="wide order-detail-block"><header><h4>完整审批流水</h4><span>{{ stateText(draft.requisition.state) }}</span></header><div v-if="draft.requisition.approval_history?.length" class="approval-timeline"><div v-for="(step,index) in draft.requisition.approval_history" :key="step.cycle + '-' + index" :data-state="step.state"><i></i><div><strong>第 {{ step.cycle }} 轮 · {{ step.role_label || approvalRoleText(step.role_code) }}</strong><span>{{ historyStateText(step) }}</span><small>{{ approvalActorText(step) }} · {{ dateTime(step.acted_at) }}</small><p v-if="step.comment">{{ step.comment }}</p></div></div></div><div v-else class="inventory-empty">采购需求尚未提交审批</div></section>
       </template>
@@ -1519,13 +1543,21 @@ watch(tab, (newTab) => {
           <div><span>收货单号</span><strong>{{ draft.receipt.name }}</strong></div>
           <div><span>供应商</span><strong>{{ draft.receipt.supplier?.name || '-' }}</strong><small>{{ draft.receipt.supplier?.code || '' }}</small></div>
           <div><span>收货仓库</span><strong>{{ draft.receipt.factory?.name || '-' }}</strong></div>
-          <div><span>采购订单号</span><strong>{{ draft.receipt.purchase_order?.name || '-' }}</strong></div>
+          <div><span>采购订单号</span><button v-if="draft.receipt.purchase_order" class="record-link record-link-main" type="button" @click="openOrderDetail(draft.receipt.purchase_order)">{{ draft.receipt.purchase_order.name }}</button><span v-else>-</span></div>
           <div><span>制单日期</span><strong>{{ dateTime(draft.receipt.create_date) }}</strong></div>
           <div><span>操作员</span><strong>{{ draft.receipt.creator || '-' }}</strong></div>
           <div><span>审批状态</span><strong>{{ stateText(draft.receipt.state) }}</strong></div>
           <div><span>最后修改</span><strong>{{ dateTime(draft.receipt.write_date) }}</strong></div>
         </div>
         <section v-if="draft.receipt.return_reason" class="wide order-detail-block"><header><h4>退回原因</h4></header><p style="color:#ef5350">{{ draft.receipt.return_reason }}</p></section>
+        <section class="wide order-detail-block">
+          <header><h4>质检与入库批次</h4><span>{{ draft.receipt.state === 'done' ? '已入库 · ' + dateTime(draft.receipt.completed_at) : stateText(draft.receipt.state) }}</span></header>
+          <div class="linked-orders">
+            <button v-if="draft.receipt.quality_inspection_id" type="button" @click="openInspectionDetail({ id: draft.receipt.quality_inspection_id })"><strong>查看关联质检单</strong><small>合格 {{ number(draft.receipt.total_qualified,3) }} / 不合格 {{ number(draft.receipt.total_rejected,3) }}</small></button>
+            <button v-for="line in draft.receipt.lines.filter(item => item.lot_id)" :key="line.id" type="button" @click="openLotDetail(line.lot_id)"><strong>{{ line.lot_name }}</strong><span>{{ line.product?.name }}</span><small>查看批次库存及出入库记录</small></button>
+          </div>
+          <p v-if="!draft.receipt.quality_inspection_id && !draft.receipt.lines.some(line => line.lot_id)" class="inventory-empty">确认到货后生成库存批次和质检单</p>
+        </section>
         <section class="wide order-detail-block"><header><h4>收货明细</h4><span>{{ draft.receipt.lines?.length || 0 }} 项</span></header>
           <div class="work-table-wrap"><table class="work-table"><thead><tr><th>序号</th><th>原料信息</th><th>包装单位</th><th>采购件数</th><th>已收货件数</th><th>合格件数</th><th>不合格件数</th><th>当前库存</th><th>已退件数</th><th>可退件数</th><th>有效期</th><th>规格批号</th></tr></thead><tbody>
             <tr v-for="(line,index) in draft.receipt.lines" :key="line.id"><td>{{ index + 1 }}</td><td><strong>{{ line.product?.name }}</strong><small>{{ line.product?.brand || '-' }} · {{ line.product?.specification || '-' }}</small></td><td>{{ line.uom?.name || '-' }}<small>{{ line.package_spec || '' }}</small></td><td>{{ number(line.ordered_qty,3) }}</td><td>{{ number(line.received_qty,3) }}</td><td>{{ number(line.qualified_qty,3) }}</td><td>{{ number(line.rejected_qty,3) }}</td><td>{{ number(line.stock_available_qty || 0,3) }}</td><td>{{ number(line.returned_qty || 0,3) }}</td><td>{{ number(line.returnable_qty || 0,3) }}</td><td>{{ line.expiration_date || '-' }}</td><td>{{ line.supplier_lot || '-' }}</td></tr>
@@ -1539,8 +1571,8 @@ watch(tab, (newTab) => {
       <template v-else-if="modal === 'inspection-detail'">
         <div class="wide order-detail-summary">
           <div><span>质检单号</span><strong>{{ draft.inspectionDetail.name }}</strong></div>
-          <div><span>收货单号</span><strong>{{ draft.inspectionDetail.receipt_name || '-' }}</strong></div>
-          <div><span>采购订单</span><strong>{{ draft.inspectionDetail.purchase_order?.name || '-' }}</strong></div>
+          <div><span>收货单号</span><button v-if="draft.inspectionDetail.receipt_id" class="record-link record-link-main" type="button" @click="openReceiptDetail({ id: draft.inspectionDetail.receipt_id })">{{ draft.inspectionDetail.receipt_name }}</button><span v-else>-</span></div>
+          <div><span>采购订单</span><button v-if="draft.inspectionDetail.purchase_order" class="record-link record-link-main" type="button" @click="openOrderDetail(draft.inspectionDetail.purchase_order)">{{ draft.inspectionDetail.purchase_order.name }}</button><span v-else>-</span></div>
           <div><span>供应商</span><strong>{{ draft.inspectionDetail.supplier?.name || '-' }}</strong></div>
           <div><span>检验员</span><strong>{{ draft.inspectionDetail.inspector?.name || '-' }}</strong></div>
           <div><span>检验时间</span><strong>{{ dateTime(draft.inspectionDetail.inspected_at) }}</strong></div>
@@ -1589,8 +1621,8 @@ watch(tab, (newTab) => {
           <div><span>退货单号</span><strong>{{ draft.returnRecord.name }}</strong></div>
           <div><span>供应商</span><strong>{{ draft.returnRecord.supplier?.name || '-' }}</strong></div>
           <div><span>仓库</span><strong>{{ draft.returnRecord.factory?.name || '-' }}</strong></div>
-          <div><span>采购订单号</span><strong>{{ draft.returnRecord.purchase_order?.name || '-' }}</strong></div>
-          <div><span>来源收货单</span><strong>{{ draft.returnRecord.receipt_name || '-' }}</strong></div>
+          <div><span>采购订单号</span><button v-if="draft.returnRecord.purchase_order" class="record-link record-link-main" type="button" @click="openOrderDetail(draft.returnRecord.purchase_order)">{{ draft.returnRecord.purchase_order.name }}</button><span v-else>-</span></div>
+          <div><span>来源收货单</span><button v-if="draft.returnRecord.receipt_id" class="record-link record-link-main" type="button" @click="openReceiptDetail({ id: draft.returnRecord.receipt_id })">{{ draft.returnRecord.receipt_name }}</button><span v-else>-</span></div>
           <div><span>制单日期</span><strong>{{ dateTime(draft.returnRecord.create_date) }}</strong></div>
           <div><span>操作员</span><strong>{{ draft.returnRecord.creator || '-' }}</strong></div>
           <div><span>审批状态</span><strong>{{ stateText(draft.returnRecord.state) }}</strong></div>
@@ -1603,6 +1635,7 @@ watch(tab, (newTab) => {
           <div class="purchase-total"><span>退货总金额</span><strong>¥{{ number(draft.returnRecord.amount_total) }}</strong></div>
         </section>
         <section v-if="draft.returnRecord.return_reason" class="wide order-detail-block"><header><h4>退货原因</h4></header><p>{{ draft.returnRecord.return_reason }}</p></section>
+        <section class="wide order-detail-block"><header><h4>关联库存批次</h4><span>{{ draft.returnRecord.state === 'done' ? '已退货出库' : stateText(draft.returnRecord.state) }}</span></header><div class="linked-orders"><button v-for="line in draft.returnRecord.lines.filter(item => item.lot)" :key="line.id" type="button" @click="openLotDetail(line.lot.id)"><strong>{{ line.lot.name }}</strong><span>{{ line.product?.name }}</span><small>查看退货出库及库存变化</small></button></div></section>
         <section v-if="draft.returnRecord.approval_history?.length" class="wide order-detail-block"><header><h4>审批流程</h4><span>{{ stateText(draft.returnRecord.state) }}</span></header>
           <div class="approval-timeline"><div v-for="(step,index) in draft.returnRecord.approval_history" :key="step.cycle + '-' + index" :data-state="step.state"><i></i><div><strong>第 {{ step.cycle }} 轮 · {{ step.role_label || approvalRoleText(step.role_code) }}</strong><span>{{ historyStateText(step) }}</span><small>{{ approvalActorText(step) }} · {{ dateTime(step.acted_at) }}</small><p v-if="step.comment">{{ step.comment }}</p></div></div></div>
         </section>
@@ -1631,6 +1664,16 @@ watch(tab, (newTab) => {
         </div>
       </template>
       <div v-if="modalError" class="master-error wide">{{ modalError }}</div></div><footer><button class="btn btn-secondary" type="button" @click="modal = ''">{{ ['count-review','order-detail','requisition-detail','receipt-detail','inspection-detail','return-detail'].includes(modal) ? '关闭' : '取消' }}</button><button v-if="modal === 'receipt-detail' && canWarehouse && draft.receipt?.state === 'pending_approval' && draft.receipt?.approval_state === 'returned'" class="btn btn-outline" type="button" @click="openReceiptEdit(draft.receipt)">编辑收货单</button><button v-if="modal === 'receipt-detail' && canWarehouse && draft.receipt?.state === 'pending_approval' && draft.receipt?.approval_state === 'returned'" class="btn btn-primary" type="button" :disabled="saving" @click="receiptAction(draft.receipt, 'confirm-arrival')">重新提交审批</button><button v-if="modal === 'inspection-detail' && canWarehouse && ['draft','returned'].includes(draft.inspectionDetail?.state)" class="btn btn-primary" type="button" :disabled="saving" @click="openQuality(draft.inspectionDetail)">{{ draft.inspectionDetail?.state === 'returned' ? '修改并重新提交' : '录入并提交审批' }}</button><button v-if="!['count-review','order-detail','requisition-detail','receipt-detail','inspection-detail','return-detail'].includes(modal)" class="btn btn-primary" type="button" :disabled="saving" @click="submitModal">{{ saving ? '处理中...' : modal === 'order' ? `按规则生成 ${purchaseOrderGroups.length} 张采购单` : modal === 'order-edit' ? (draft.resubmit ? '保存并重新提交' : '保存修改') : ['requisition-edit','receipt-edit'].includes(modal) ? '保存修改' : modal === 'return-edit' ? (draft.returnRecord ? '保存修改' : '创建退货单') : modal === 'quality' ? '保存并提交审批' : modal === 'plan' ? '生成采购需求单' : '确认' }}</button></footer></section></div>
+    <ProductionPlanDetail v-if="selectedPlanId" class="procurement-plan-detail" :plan-id="selectedPlanId" read-only @close="selectedPlanId = null" />
+    <div v-if="selectedLot" class="inventory-modal-mask procurement-lot-detail" @click.self="selectedLot = null">
+      <section class="inventory-modal inventory-modal-wide" role="dialog" aria-modal="true" aria-label="库存批次与出入库记录">
+        <header><div><h3>{{ selectedLot.name }}</h3><p>{{ selectedLot.product?.name }} · {{ expiryText(selectedLot) }}</p></div><button class="inventory-modal-close" type="button" @click="selectedLot = null">×</button></header>
+        <div class="inventory-modal-body">
+          <div class="wide order-detail-summary"><div><span>账面</span><strong>{{ number(selectedLot.on_hand,3) }} {{ selectedLot.uom }}</strong></div><div><span>预占</span><strong>{{ number(selectedLot.reserved,3) }}</strong></div><div><span>可用</span><strong>{{ number(selectedLot.available,3) }}</strong><small>{{ availableReasonText(selectedLot) }}</small></div><div v-if="selectedLot.source_receipt"><span>来源收货单</span><button class="record-link" type="button" @click="openMovementSource({ model: 'brew.receipt', id: selectedLot.source_receipt.id })">{{ selectedLot.source_receipt.name }}</button></div></div>
+          <section class="wide order-detail-block"><header><h4>出入库记录</h4><span>最近 {{ selectedLot.recent_movements?.length || 0 }} 条（最多100条）</span></header><div class="work-table-wrap"><table class="work-table"><thead><tr><th>时间</th><th>关联单据</th><th>数量</th><th>来源库位 → 目标库位</th></tr></thead><tbody><tr v-for="movement in selectedLot.recent_movements" :key="movement.id"><td>{{ dateTime(movement.date) }}</td><td><button v-if="movement.source?.id && ['brew.receipt','brew.purchase.return','brew.production.plan'].includes(movement.source.model)" class="record-link" type="button" @click="openMovementSource(movement.source)">{{ movement.source.reference }}</button><span v-else>{{ movement.source?.reference || '-' }}</span></td><td>{{ number(movement.quantity,3) }} {{ movement.uom }}</td><td>{{ movement.source_location }} → {{ movement.destination_location }}</td></tr><tr v-if="!selectedLot.recent_movements?.length"><td colspan="4" class="inventory-empty">暂无已完成的出入库记录</td></tr></tbody></table></div></section>
+        </div><footer><button class="btn btn-secondary" type="button" @click="selectedLot = null">关闭</button></footer>
+      </section>
+    </div>
   </div>
 </template>
 

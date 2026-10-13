@@ -2,20 +2,24 @@
 import { ref, computed, watch } from 'vue';
 import { brewApi } from '../api';
 import FermentationExecution from './FermentationExecution.vue';
-const props = defineProps({ planId: [String, Number], allowExecution: { type: Boolean, default: false }, focusTaskId: [String, Number] });
+const props = defineProps({ planId: [String, Number], allowExecution: { type: Boolean, default: false }, focusTaskId: [String, Number], readOnly: { type: Boolean, default: false } });
 const emit = defineEmits(['close', 'changed', 'open-task']);
 const selectedTask = ref(null);
 const fermentationExpanded = ref(false);
 const commandConflicts = ref([]);
 const conflicts = computed(() => commandConflicts.value.length ? commandConflicts.value : (plan.value?.resource_check?.ok === false ? plan.value.resource_check.conflicts || [] : []));
 const detail = ref(null), loading = ref(false), saving = ref(false), error = ref(''), inventory = ref(null);
-const stateNames = { draft: '待下发', checked: '待下发', stocking: '原料备货中', pending_approval: '待下发', approved: '待下发', dispatched: '待糖化', in_progress: '执行中', done: '已完成', cancelled: '已取消', terminated: '已终止' };
+const stateNames = { draft: '草稿', checked: '已完成资源校验', stocking: '原料备货中', pending_approval: '待审批', approved: '已批准', dispatched: '已下发', in_progress: '执行中', done: '已完成', cancelled: '已取消', terminated: '已终止' };
 const conditions = { time: "时间", gravity: "糖度", attenuation: "实际发酵度", diacetyl: "双乙酰", temperature: "温度", pressure: "压力" };
 const actions = { measure_gravity: "测量糖度", measure_temperature: "测量温度", measure_pressure: "测量压力", measure_diacetyl: "测量双乙酰", seal: "封罐", dry_hop: "干投", cool_to: "降温至", dump_hops: "排出酒花", centrifuge: "离心", increase_pressure: "升压至", package: "出酒" };
 const fermentationDesign = computed(() => detail.value?.plan?.recipe_snapshot?.design?.fermentation || {});
 const taskNames = { mashing: '糖化执行', fermentation: '发酵执行', material_preparation: '备料' };
 const taskStates = { pending: '待分配', claimed: '待执行', in_progress: '执行中', done: '已完成', returned: '已退回', cancelled: '已取消' };
 const plan = computed(() => detail.value?.plan);
+const materials = computed(() => {
+  const snapshot = plan.value?.material_snapshot;
+  return Array.isArray(snapshot) ? snapshot : (snapshot?.materials || []);
+});
 const fermentationTask = computed(() => detail.value?.tasks.find(task => task.task_type === 'fermentation'));
 const showFinishFermentation = computed(() => fermentationExpanded.value && fermentationTask.value?.state === 'in_progress' && canOperate(fermentationTask.value) && executable.value);
 const fermentationProgress = computed(() => { const entries = fermentationTask.value?.fermentation_execution?.entries || []; return { total: entries.length, done: entries.filter(e => e.status === 'done').length, daily: entries.filter(e => e.day && e.status !== 'done').length, conditions: entries.filter(e => !e.day && e.status !== 'done').length }; });
@@ -70,13 +74,18 @@ async function taskAction(task, name) {
           <div class="plan-flow"><div v-for="(stage,index) in flow" :key="stage.name" :class="stage.state"><b>{{ stage.state === 'done' ? '✓' : index + 1 }}</b><span>{{ stage.name }}</span></div></div>
           <div class="plan-detail-status"><strong>{{ stateNames[plan.state] || plan.state }}</strong><span>{{ plan.equipment.name }} · {{ plan.factory.name }}</span></div>
           <div v-if="conflicts.length && ['draft','checked','pending_approval','approved'].includes(plan.state)" class="master-error" role="alert"><strong>生产安排存在冲突，请调整后重新下发</strong><div v-for="item in conflicts" :key="item.type + item.id">{{ item.name }} · {{ item.reason || '设备或罐体时间重叠' }}<span v-if="item.start_at"> · {{ date(item.start_at) }} 至 {{ date(item.end_at) }}</span></div></div>
-          <p v-if="detail.can_manage && ['draft','checked','pending_approval','approved'].includes(plan.state)" class="rw-hint">备货完成后直接下发任务，系统会自动检查生产安排并预占原料。</p>
-          <div v-if="detail.can_manage" class="plan-detail-actions">
+          <p v-if="!readOnly && detail.can_manage && ['draft','checked','pending_approval','approved'].includes(plan.state)" class="rw-hint">备货完成后直接下发任务，系统会自动检查生产安排并预占原料。</p>
+          <div v-if="!readOnly && detail.can_manage" class="plan-detail-actions">
             <button class="btn btn-sm btn-outline" :disabled="saving" @click="checkInventory">核对库存</button>
             <button v-if="['draft','checked'].includes(plan.state) && inventory && !inventory.ok" class="btn btn-sm btn-primary" :disabled="saving" @click="action('request-stock')">提交备货需求</button>
             <button v-if="plan.state === 'stocking'" class="btn btn-sm btn-primary" :disabled="saving" @click="action('complete-stock')">核对并完成备货</button>
             <button v-if="['draft','checked','pending_approval','approved'].includes(plan.state)" class="btn btn-sm btn-primary" :disabled="saving" @click="action('dispatch')">{{ saving ? '下发中…' : '下发生产任务' }}</button>
           </div>
+          <section v-if="readOnly" class="plan-readonly-materials">
+            <div class="plan-readonly-heading"><div><h3 class="plan-detail-heading">计划所需原料</h3><p>来源于生产计划快照，当前窗口仅供查看。</p></div><span>{{ materials.length }} 项</span></div>
+            <div v-if="materials.length" class="plan-stock-table"><table><thead><tr><th>序号</th><th>原料</th><th>阶段</th><th>计划用量</th><th>说明</th></tr></thead><tbody><tr v-for="(material,index) in materials" :key="material.material_id || material.product_id || index"><td>{{ index + 1 }}</td><td><strong>{{ material.material_name || material.product_name || '-' }}</strong></td><td>{{ ({ mash: '糖化', boil: '煮沸', fermentation: '发酵', packaging: '包装' })[material.stage] || material.stage || '-' }}</td><td>{{ Number(material.quantity || 0).toFixed(3) }} {{ material.uom_name || material.uom || '' }}</td><td>{{ material.notes || '-' }}</td></tr></tbody></table></div>
+            <div v-else class="empty">该计划暂未形成用料快照。</div>
+          </section>
           <div v-if="plan.stocking_request?.name" class="plan-stock-message">备货需求 {{ plan.stocking_request.name }} · {{ plan.stocking_request.completed_at ? '已完成备货' : '等待采购入库' }}</div>
           <div v-if="inventory" class="plan-stock-table"><table><thead><tr><th>原料</th><th>需要</th><th>可供领用</th><th>缺口</th></tr></thead><tbody><tr v-for="row in inventory.materials" :key="row.product.id"><td>{{ row.product.name }}</td><td>{{ row.required.toFixed(1) }} {{ row.uom }}</td><td>{{ row.allocated.toFixed(1) }} {{ row.uom }}</td><td class="stock-shortage">{{ row.shortage.toFixed(1) }} {{ row.uom }}</td></tr></tbody></table></div>
           <section><h3 class="plan-detail-heading">本批次任务</h3><div class="plan-detail-task-list"><article v-for="task in detail.tasks" :key="task.id" class="plan-detail-task" :class="{ focused: String(task.id) === String(focusTaskId) }"><div><strong>{{ task.name }}</strong><small>{{ task.assignee?.name || '仓库人员' }} · {{ task.assignee && ['pending','claimed'].includes(task.state) ? '待执行' : taskStates[task.state] || task.state }}<span v-if="task.execution_blocked_reason && !['done','cancelled'].includes(task.state)"> · {{ task.execution_blocked_reason }}</span></small></div><div class="plan-detail-task-buttons"><button v-if="task.task_type === 'mashing'" class="btn btn-xs btn-outline" :disabled="canOperate(task) && !!task.execution_blocked_reason && task.state !== 'done'" :aria-expanded="!canOperate(task) && String(selectedTask?.id) === String(task.id)" @click="openTask(task)">{{ canOperate(task) ? '执行糖化任务' : String(selectedTask?.id) === String(task.id) ? '收起节点' : '查看节点' }}</button><button v-else-if="task.task_type === 'fermentation'" class="btn btn-xs btn-outline" :aria-expanded="fermentationExpanded" @click="fermentationExpanded = !fermentationExpanded">{{ fermentationExpanded ? '收起详情' : '查看详情' }}</button></div></article></div></section>
@@ -99,8 +108,15 @@ async function taskAction(task, name) {
 .plan-secondary-section summary::after{content:'展开 ⌄';margin-left:auto;white-space:nowrap;color:#d4a747;font-size:13px}
 .plan-secondary-section[open] summary::after{content:'收起 ⌃'}
 .plan-secondary-content{padding:0 20px 20px}
+.plan-readonly-materials{margin-top:18px}
+.plan-readonly-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:10px}
+.plan-readonly-heading .plan-detail-heading{margin:0}
+.plan-readonly-heading p{margin:5px 0 0;color:var(--text-muted,#aaa);font-size:13px}
+.plan-readonly-heading>span{flex:none;color:var(--text-muted,#aaa);font-size:13px}
+.plan-readonly-materials .plan-stock-table{margin-top:0}
+.plan-readonly-materials td:first-child,.plan-readonly-materials th:first-child{width:62px;text-align:center}
 :deep(.fermentation-execution){margin-top:24px;padding:20px;border:1px solid #d4a74745;border-radius:14px;background:#d4a74705}
 :deep(.fermentation-execution>.plan-detail-heading){margin-top:0}
-@media(max-width:650px){.plan-secondary-section summary{flex-wrap:wrap;gap:8px}.plan-secondary-section summary span{font-size:12px}:deep(.fermentation-execution){padding:14px}}
+@media(max-width:650px){.plan-secondary-section summary{flex-wrap:wrap;gap:8px}.plan-secondary-section summary span{font-size:12px}.plan-readonly-heading{align-items:flex-start}:deep(.fermentation-execution){padding:14px}}
 .fermentation-completion-progress{margin-right:auto;font-size:13px;line-height:1.5}.fermentation-completion-progress strong{display:block;color:#d4a747}.fermentation-completion-progress span{color:#aaa}@media(max-width:650px){.fermentation-completion-progress{width:100%}}
 </style>
