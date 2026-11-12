@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { brewApi } from '../api';
-import { calculateRecipe, normalizeDesign } from '../recipe-calculations';
+import { calculateRecipe, normalizeDesign, present } from '../recipe-calculations';
 import MashWorkflowDesigner from './MashWorkflowDesigner.vue';
 
 const props = defineProps({
@@ -60,11 +60,18 @@ function addFermentationStep() { design.value.fermentation.steps.push({ conditio
 function finishDesign() {
   const result = deepCopy(design.value);
   result.schema_version = 2;
-  result.calculation_version = '2026-09-24';
+  result.calculation_version = result.mash.water_calculation === 'original' ? '2026-10-28-original' : '2026-09-24';
   result.brew_volume_l = Number(props.plannedVolume);
   result.brew_equipment_id = String(props.equipmentId || result.brew_equipment_id);
-  result.mash.sparge_mode = 'auto';
-  result.mash.sparge_water_liters = [...calculateRecipe(result).spargeWaters];
+  for (const [key, label, min, max] of [['evaporation_rate', '煮沸强度', 0, 100], ['water_grain_ratio', '糖化水料比', .1], ['boil_time_min', '煮沸时间', 1], ['sparge_count', '洗糟次数', 1, 10]]) {
+    const value = result.mash[key];
+    if (!present(value) || Number(value) < min || (max != null && Number(value) > max)) throw new Error(`请填写有效的${label}。`);
+  }
+  if (!Number.isInteger(Number(result.mash.sparge_count))) throw new Error('洗糟次数须为 1–10 的整数。');
+  const water = calculateRecipe(result);
+  if (result.mash.sparge_mode === 'manual' && result.mash.sparge_water_liters.some(value => !present(value) || value < 0)) throw new Error('请为每次洗糟填写有效的用水量。');
+  if (result.mash.sparge_mode === 'manual' && Math.abs(water.spargeDifference) > .005) throw new Error('每次洗糟水量合计须与所需洗糟水量一致。');
+  result.mash.sparge_water_liters = [...water.spargeWaters];
   const total = calculateRecipe(result).totalQuantity;
   result.fermentables.forEach(line => { line.ratio = total ? Number(line.quantity || 0) / total * 100 : 0; });
   result.calculated = calculateRecipe(result);
@@ -73,12 +80,6 @@ function finishDesign() {
   if (result.yeast.some(line => !line.material_id || !(Number(line.quantity) > 0))) throw new Error('酵母必须选择原料并填写用量。');
   if (!result.mash.steps.length) throw new Error('请至少配置一个糖化温度和时间步骤，以便计算预热温度。');
   if (result.mash.steps.some(step => !step.name?.trim() || !(Number(step.temperature) >= 0) || !(Number(step.duration_min) >= 1))) throw new Error('请补全糖化步骤的名称、温度和时长。');
-  const workflow = result.mash.workflow || {};
-  if (!(Number(workflow.sparge_temperature_c) >= 0 && Number(workflow.sparge_temperature_c) <= 100)) throw new Error('请填写有效的洗糟水温度。');
-  if (!(Number(workflow.preheat_offset_c) >= 0 && Number(workflow.preheat_offset_c) <= 20)) throw new Error('预热温差须在 0–20℃ 之间。');
-  if (!(Number(workflow.whirlpool_time_min) >= 0)) throw new Error('请填写有效的回旋沉淀时间。');
-  if (!(Number(workflow.cooling_temperature_c) >= 0 && Number(workflow.cooling_temperature_c) <= 40)) throw new Error('请填写有效的冷却目标温度。');
-  for (const rows of Object.values(workflow.operations || {})) if (rows.some(operation => !operation.name?.trim())) throw new Error('补充操作名称不能为空。');
   if (result.hops.some(line => line.use === 'boil' && Number(line.time) > Number(result.mash.boil_time_min))) throw new Error('酒花煮沸时长不能超过总煮沸时间。');
   for (const step of result.fermentation.steps) {
     if (step.condition === 'time' && !['daily', 'day', 'interval'].includes(step.schedule_type)) throw new Error('请选择有效的发酵时间条件。');
@@ -133,7 +134,7 @@ watch(() => [props.visible, props.sourceType, props.recipeVersionId, props.produ
             <div class="production-recipe-group"><div class="production-recipe-group-title">酵母 <button class="btn btn-xs btn-outline" type="button" @click="addLine('yeast')">＋ 添加酵母</button></div><div v-for="(line,index) in design.yeast" :key="'yeast-'+index" class="production-recipe-line"><select v-model="line.material_id" required @change="chooseMaterial('yeast',line)"><option value="">选择酵母</option><option v-for="item in materialChoices('yeast')" :key="item.id" :value="item.id">{{ item.name }}</option></select><input v-model.number="line.quantity" type="number" min="0.001" step="0.1" placeholder="用量 g"><input v-model.number="line.temperature" type="number" step="0.1" placeholder="发酵温度 ℃"><input v-model="line.flavor" placeholder="风味备注"><button class="production-recipe-remove" type="button" aria-label="删除酵母" @click="removeLine('yeast',index)">×</button></div><div v-if="!design.yeast.length" class="empty">没有酵母原料</div></div>
             <div class="production-recipe-group"><div class="production-recipe-group-title">目标指标</div><div class="production-recipe-metrics"><label><span>OG</span><input v-model.number="design.targets.og" type="number" min="1" step="0.001"></label><label><span>FG</span><input v-model.number="design.targets.fg" type="number" min="0.9" step="0.001"></label><label><span>IBU</span><input v-model.number="design.targets.ibu" type="number" min="0" step="0.1"></label><label><span>色度（EBC）</span><input v-model.number="design.targets.color" type="number" min="0" step="0.1"></label><label><span>酒精度（%）</span><input v-model.number="design.targets.abv" type="number" min="0" step="0.1"></label><label><span>发酵度（%）</span><input v-model.number="design.attenuation_override" type="number" min="0" max="100" step="0.1"></label></div></div>
           </section>
-          <section v-else-if="tab === 'mash'" class="production-recipe-section"><MashWorkflowDesigner :mash="design.mash" :fermentables="design.fermentables" :hops="design.hops" :fermentation="design.fermentation" :metrics="metrics" /></section>
+          <section v-else-if="tab === 'mash'" class="production-recipe-section"><MashWorkflowDesigner :mash="design.mash" :metrics="metrics" /></section>
           <section v-else class="production-recipe-section">
             <div class="production-recipe-metrics"><label><span>目标发酵温度（℃）</span><input v-model.number="design.fermentation.target_temperature" type="number" step="0.1"></label><label><span>目标发酵天数</span><input v-model.number="design.fermentation.target_days" type="number" min="0" step="0.5"></label><label><span>冷储温度（℃）</span><input v-model.number="design.fermentation.cold_storage_temperature" type="number" step="0.1"></label></div>
             <label class="production-recipe-notes"><span>发酵工艺说明</span><textarea v-model.trim="design.fermentation.notes" rows="3" placeholder="接种、降温节点、压力控制和冷储要求"></textarea></label>

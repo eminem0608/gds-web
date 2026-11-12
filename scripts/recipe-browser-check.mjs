@@ -91,14 +91,15 @@ try {
   await writeFile('/tmp/recipe-fermentation-check.png',Buffer.from((await command('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await click('保存草稿'); await until(`window.recipeTestWrites.length===1`);
   await until(`!!document.querySelector('.rw-notice')?.textContent.includes('已保存')`);
+  await until(`!document.querySelector('.rw-mask')`);
   const saved=await evaluate(`window.recipeTestWrites[0].initial_version.design`);
   assert.equal(saved.fermentation.steps[0].schedule_type,'interval');assert.equal(saved.fermentation.steps[0].interval_days,3);
   assert.equal(saved.fermentables.length,1);assert.equal(saved.hops.length,1);assert.equal(saved.yeast.length,1);
-  await click('关闭',`document.querySelector('.equipment-modal-footer')`);
   await click('查看 / 编辑'); await click('发酵工艺');
   assert.equal(await evaluate(`document.querySelector('.rw-segment input:checked').value`),'interval');
   assert.equal(await evaluate(`document.querySelector('.rw-condition input').value`),'3');
   await click('保存草稿'); await until(`window.recipeTestWrites.length===2`);
+  await until(`!document.querySelector('.rw-mask')`);
   assert.equal(errors.length,0,JSON.stringify(errors));
   console.log('PASS: actual login/navigation, basic field heights (46px), mobile overflow, supplier picker, table alignment, tab stability, interval input, mocked save/reopen/update, no runtime exceptions');
 } finally { socket.close(); }

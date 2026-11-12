@@ -6,6 +6,7 @@ import { emptyDesign, calculateRecipe, normalizeDesign, scaleToTarget } from '..
 function fixture() {
   const d = emptyDesign();
   d.brew_volume_l = 20;
+  Object.assign(d.mash, { water_calculation: 'legacy', water_grain_ratio: 3.5, boil_time_min: 60, evaporation_rate: 10, sparge_count: 3 });
   d.fermentables = [{ quantity: 4, extract_rate: 80, color: 4 }, { quantity: .5, extract_rate: 75, color: 120 }];
   d.hops = [{ use: 'boil', time: 60, quantity: 20, alpha_acid: 10 }, { use: 'boil', time: 10, quantity: 10, alpha_acid: 5 }];
   d.yeast = [{ attenuation: 75 }];
@@ -57,4 +58,41 @@ test('legacy design keeps actual batch volume and does not guess broken radio va
   assert.equal(d.brew_volume_l,20); assert.equal(d.attenuation_override,76);
   assert.equal(d.fermentation.steps[0].schedule_type,'');
   assert.equal(d.fermentation.steps[1].condition_value,'18');
+});
+test('original mash page starts with temperature steps and standard execution', () => {
+  const d = emptyDesign();
+  assert.equal(d.mash.water_calculation, 'original');
+  assert.equal(d.mash.workflow.execution_mode, 'standard');
+  for (const key of ['evaporation_rate', 'water_grain_ratio', 'boil_time_min', 'sparge_count']) assert.equal(d.mash[key], '');
+  assert.deepEqual(d.mash.steps, []);
+  assert.deepEqual(d.mash.workflow.operations, {});
+  d.mash.steps.push({ name: '糖化', temperature: 65, duration_min: 30 });
+  const restored = normalizeDesign(reactive(d));
+  assert.deepEqual(restored.mash.steps, d.mash.steps);
+  assert.deepEqual(restored.mash.workflow.operations, {});
+  assert.deepEqual(emptyDesign().mash.steps, []);
+});
+test('original water formulas use total boil intensity and distribute sparge water exactly', () => {
+  const d = emptyDesign();
+  d.brew_volume_l = 500;
+  d.fermentables = [{ quantity: 100, extract_rate: 80, color: 4 }];
+  Object.assign(d.mash, { screen_water_l: 30, efficiency: 75, evaporation_rate: 10, water_grain_ratio: 3, boil_time_min: 90, sparge_count: 3 });
+  const m = calculateRecipe(d);
+  near(m.preBoilVolume, 550); near(m.mashWater, 300);
+  near(m.spargeWater, 250); near(m.totalWater, 500);
+  assert.deepEqual(m.spargeWaters, [83.33, 83.33, 83.34]);
+  d.mash.boil_time_min = 60; near(calculateRecipe(d).preBoilVolume, 550);
+  d.mash.sparge_mode = 'manual'; d.mash.sparge_water_liters = [100, 75, 75];
+  near(calculateRecipe(d).spargeDifference, 0);
+  const restored = normalizeDesign(reactive(d));
+  assert.deepEqual(calculateRecipe(restored).spargeWaters, [100, 75, 75]);
+  restored.mash.sparge_water_liters[0] = 100.01;
+  assert.ok(calculateRecipe(restored).spargeDifference > .005);
+});
+test('legacy water calculations remain unchanged when a saved recipe is opened', () => {
+  const saved = fixture(); delete saved.mash.water_calculation;
+  const restored = normalizeDesign(saved);
+  assert.equal(restored.mash.water_calculation, 'legacy');
+  near(calculateRecipe(restored).spargeWater, 9.85);
+  assert.deepEqual(restored.mash.workflow.operations, {});
 });

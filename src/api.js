@@ -81,6 +81,7 @@ async function request(path, options = {}) {
       payload.request_id || ""
     );
   }
+  if (method !== 'GET' && typeof window !== 'undefined') window.dispatchEvent(new Event('brew-tasks-changed'));
   return payload.data;
 }
 
@@ -164,9 +165,13 @@ export const brewApi = {
       window.sessionStorage.removeItem(CSRF_STORAGE_KEY);
     }
   },
-  getDashboard() {
-    return request("/api/v1/dashboard/overview");
+  getDashboard(params = {}) {
+    return request(`/api/v1/dashboard/overview?${new URLSearchParams(params).toString()}`);
   },
+  getReportCatalog() { return request('/api/v1/reports/catalog'); },
+  getReportData(code, params = {}) { return request(`/api/v1/reports/data/${code}?${new URLSearchParams(params)}`); },
+  reportDownloadUrl(code, params = {}) { return `${API_BASE}/api/v1/reports/data/${code}/download?${new URLSearchParams(params)}`; },
+  listInventoryCountPage(params = {}) { return requestWithMeta(`/api/v1/inventory/counts?${new URLSearchParams(params)}`); },
   getReportSummary(params = {}) {
     return request(`/api/v1/reports/summary?${new URLSearchParams(params).toString()}`);
   },
@@ -201,7 +206,7 @@ export const brewApi = {
     return request(`/api/v1/tanks?${new URLSearchParams(params).toString()}`);
   },
   getTank(id) {
-    return request(`/api/v1/tanks/${id}`);
+    return request(`/api/v1/fermentation/tanks/${id}`);
   },
   listFermentationReadings(sessionId, params = {}) {
     return request(`/api/v1/fermentation-sessions/${sessionId}/readings?${new URLSearchParams(params).toString()}`);
@@ -239,6 +244,17 @@ export const brewApi = {
   listInventoryLots(params = {}) {
     return request(`/api/v1/inventory/lots?${new URLSearchParams(params).toString()}`);
   },
+  getOpeningStockOptions(factoryId = "") {
+    const query = factoryId ? `?factory_id=${encodeURIComponent(factoryId)}` : "";
+    return request(`/api/v1/inventory/opening-stock/options${query}`);
+  },
+  createOpeningStock(data) {
+    return request("/api/v1/inventory/opening-stock", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
+  },
   getInventoryLot(id) {
     return request(`/api/v1/inventory/lots/${id}`);
   },
@@ -257,6 +273,19 @@ export const brewApi = {
   },
   listInventoryCounts(params = {}) {
     return request(`/api/v1/inventory/counts?${new URLSearchParams(params).toString()}`);
+  },
+  listInventoryCountPage(params = {}) {
+    return requestWithMeta(`/api/v1/inventory/counts?${new URLSearchParams({ compact: true, ...params }).toString()}`);
+  },
+  inventoryCountOptions(params = {}) {
+    return request(`/api/v1/inventory/counts/options?${new URLSearchParams(params).toString()}`);
+  },
+  addInventoryCountLine(id, data) {
+    return request(`/api/v1/inventory/counts/${id}/lines`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify(data)
+    });
   },
   createInventoryCount(data) {
     return request("/api/v1/inventory/counts", {
@@ -488,6 +517,9 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  getPlanPackagingOptions(productId, factoryId = '') {
+    return request(`/api/v1/production-plan-packaging-options?${new URLSearchParams({ product_tmpl_id: productId, factory_id: factoryId || '' })}`);
+  },
   listPackagingOrders(params = {}) {
     return request(`/api/v1/packaging-orders?${new URLSearchParams(params).toString()}`);
   },
@@ -506,6 +538,12 @@ export const brewApi = {
   },
   getTrace(code) {
     return request(`/api/v1/trace/${encodeURIComponent(code)}`);
+  },
+  searchProductTrace(params) {
+    return request(`/api/v1/product-trace?${new URLSearchParams(params)}`);
+  },
+  getProductTraceBatch(batchId, packagingId) {
+    return request(`/api/v1/product-trace/batches/${batchId}?${new URLSearchParams(packagingId ? { packaging_id: packagingId } : {})}`);
   },
   getForwardTrace(lotId) {
     return request(`/api/v1/trace/lots/${lotId}/forward`);
@@ -533,8 +571,17 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
-  getTasks() {
-    return request("/api/v1/tasks?page_size=100");
+  getMyWorkbench(params = {}) {
+    return request('/api/v1/my-workbench?' + new URLSearchParams(params).toString());
+  },
+  getInventoryCount(id) { return request(`/api/v1/inventory/counts/${id}`); },
+  inventoryDocumentAction(kind, id, version) {
+    return request(`/api/v1/inventory/${kind === 'transfer' ? 'transfers' : 'scraps'}/${id}/confirm`, {
+      method: 'POST', headers: { 'Idempotency-Key': idempotencyKey() }, body: JSON.stringify({ version })
+    });
+  },
+  getTasks(params = {}) {
+    return request(`/api/v1/tasks?${new URLSearchParams({ page_size: 100, ...params }).toString()}`);
   },
   taskAction(id, action, data) {
     return request(`/api/v1/tasks/${id}/${action}`, {
@@ -554,6 +601,9 @@ export const brewApi = {
       body: JSON.stringify(data)
     });
   },
+  createDemandCustomer(data) {
+    return request('/api/v1/demand-customers', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey() }, body: JSON.stringify(data) });
+  },
   updateMaster(resource, id, data) {
     return request(`/api/v1/${resource}/${id}`, {
       method: "PATCH",
@@ -564,6 +614,7 @@ export const brewApi = {
   listAdminUsers(params = {}) {
     return request(`/api/v1/admin/users?${new URLSearchParams(params).toString()}`);
   },
+  getAdminContext() { return request("/api/v1/admin/context"); },
   listAdminRoles() { return request("/api/v1/admin/roles"); },
   updateAdminRole(code, data) {
     return request(`/api/v1/admin/roles/${code}`, { method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data) });
@@ -633,6 +684,11 @@ export const brewApi = {
   updateRecipe(id, data) {
     return request(`/api/v1/recipes/${id}`, {
       method: "PATCH", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify(data)
+    });
+  },
+  deleteRecipe(id, version) {
+    return request(`/api/v1/recipes/${id}`, {
+      method: "DELETE", headers: { "Idempotency-Key": idempotencyKey() }, body: JSON.stringify({ version })
     });
   },
   listRecipeVersions(recipeId) {
@@ -728,6 +784,10 @@ Object.assign(brewApi, {
   listPackaging(params={}) { return request(`/api/v1/packaging-materials?${new URLSearchParams(params)}`); },
   savePackaging(id,data) { return request(`/api/v1/packaging-materials${id ? '/'+id : ''}`, { method:id?'PATCH':'POST',headers:{'Idempotency-Key':idempotencyKey()},body:JSON.stringify(data) }); },
   packagingAction(id,action,data) { return request(`/api/v1/packaging-materials/${id}/${action}`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey()},body:JSON.stringify(data)}); },
+  getWaterTargets(params={}) { return request(`/api/v1/water-targets?${new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v])=>v!==''&&v!=null)))}`); },
+  saveWaterTarget(data) { return request(`/api/v1/water-targets${data.id?'/'+data.id:''}`,{method:'POST',body:JSON.stringify(data)}); },
+  getWaterSources(factoryId='') { return request(`/api/v1/water-sources${factoryId?'?'+new URLSearchParams({factory_id:factoryId}):''}`); },
+  saveWaterSource(data) { return request(`/api/v1/water-sources${data.id?'/'+data.id:''}`,{method:'POST',body:JSON.stringify(data)}); },
   browseStock(params={}) { return request(`/api/v1/inventory/browse?${new URLSearchParams(params)}`); },
   stockProduct(id,params={}) { return request(`/api/v1/inventory/browse/${id}?${new URLSearchParams(params)}`); }
 });

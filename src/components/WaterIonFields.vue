@@ -1,0 +1,8 @@
+<script setup>
+import { IONS } from '../water-chemistry';
+defineProps({quality:Object,readOnly:Boolean,extras:{type:Boolean,default:true}});
+</script>
+<template><div class="water-ion-fields"><label v-for="(label,key) in IONS" :key="key"><span>{{ label }} <small>mg/L</small></span><input v-model.number="quality.ions[key]" type="number" min="0" max="100000" step="any" :readonly="readOnly" :required="!readOnly" placeholder="请填检测值，未知留空" :aria-label="label"></label><template v-if="extras"><label><span>总碱度 <small>mg/L，以 CaCO₃ 计</small></span><input v-model.number="quality.alkalinity" type="number" min="0" step="any" :readonly="readOnly" placeholder="选填，不能用总硬度代替"></label><label><span>原水 pH <small>室温检测</small></span><input v-model.number="quality.ph" type="number" min="0" max="14" step="0.01" :readonly="readOnly" placeholder="选填"></label></template></div></template>
+<style scoped>
+.water-ion-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.water-ion-fields label{display:grid;gap:8px;font-size:12px;color:var(--text-secondary);min-width:0}.water-ion-fields label>span{line-height:1.6}.water-ion-fields small{color:var(--text-muted);font-size:10px;margin-left:4px}.water-ion-fields input{box-sizing:border-box;width:100%;min-height:42px;padding:10px 12px;border:1px solid var(--border-default);border-radius:7px;background:var(--bg-input,#1b1c18);color:var(--text-primary);font:inherit;font-size:14px}.water-ion-fields input:read-only{border-color:transparent;background:#ffffff03}.water-ion-fields input:focus{outline:1px solid #d4a85390}@media(max-width:650px){.water-ion-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:360px){.water-ion-fields{grid-template-columns:1fr}}
+</style>

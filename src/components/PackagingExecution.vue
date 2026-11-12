@@ -1,0 +1,62 @@
+<script setup>
+import { computed, ref, watch } from 'vue';
+const props = defineProps({ plan: Object, task: Object, saving: Boolean, readOnly: Boolean, options: Object, liquid: Object });
+const emit = defineEmits(['complete']);
+const quantities = ref({}), notes = ref(''), confirmed = ref(false), actualQty = ref(''), loss = ref(0);
+const packing = computed(() => props.plan.packaging_plan || {});
+const finished = computed(() => props.task?.state === 'done' || packing.value.status === 'packaged');
+const productName = ref(''), outputUnit = ref('can'), actualVolume = ref(''), locationId = ref('');
+const locations = computed(() => props.options?.locations || []);
+const needsOutput = computed(() => finished.value && !packing.value.execution?.packaging_order_id && packing.value.status !== 'packaged');
+watch(() => [props.task?.id, props.options], () => {
+  quantities.value = Object.fromEntries((packing.value.execution?.materials || []).map(line => [line.material_id, line.quantity]));
+  notes.value = packing.value.execution?.notes || '';
+  confirmed.value = false;
+  productName.value = packing.value.execution?.finished_product_name || props.plan.product?.name || '';
+  outputUnit.value = packing.value.execution?.output_unit || 'can';
+  actualVolume.value = packing.value.execution?.output_volume_l ?? '';
+  locationId.value = locations.value.length === 1 ? String(locations.value[0].id) : '';
+  actualQty.value = packing.value.execution?.actual_qty ?? '';
+  loss.value = packing.value.execution?.loss_volume_l ?? 0;
+}, { immediate: true });
+const running = computed(() => props.task?.state === 'in_progress');
+const editable = computed(() => !props.readOnly && props.task?.is_assignee && props.plan.state === 'done' && (running.value || needsOutput.value));
+const status = computed(() => finished.value ? '包装已完成' : props.plan.state !== 'done' ? '等待发酵完成' : running.value ? '正在执行包装' : '待开始包装');
+const steps = computed(() => finished.value ? 3 : props.plan.state !== 'done' ? 0 : running.value ? 2 : 1);
+function number(value) { return Number(value || 0).toLocaleString('zh-CN', { maximumSignificantDigits: 10 }); }
+function date(value) { if (!value) return '—'; return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`).toLocaleString('zh-CN', { hour12: false }); }
+function complete() {
+  if (!editable.value || !confirmed.value || props.saving) return;
+  emit('complete', { confirmed: true, notes: notes.value, actual_qty: Number(actualQty.value), loss_volume_l: Number(loss.value), finished_product_name: productName.value.trim(), output_unit: outputUnit.value, output_volume_l: Number(actualVolume.value), finished_location_id: locationId.value, ...(packing.value.materials_only ? { actual_materials: (packing.value.materials || []).map(line => ({ material_id: line.material_id, quantity: Number(quantities.value[line.material_id] ?? line.quantity) })) } : {}) });
+}
+</script>
+<template>
+  <section class="pack-execution">
+    <header class="pack-execution-header"><div><span class="pack-eyebrow">包装执行</span><h3>{{ status }}</h3><p>{{ finished ? '已登记本次包装的实际用量和执行记录。' : plan.state !== 'done' ? '发酵任务完成后，即可开始包装。' : running ? '按材料清单完成包装，核对实际用量后提交。' : '核对材料与操作要求，点击底部按钮开始包装。' }}</p></div><span class="pack-state" :class="{ finished }">{{ finished ? '已完成' : running ? '执行中' : '待执行' }}</span></header>
+    <div class="pack-steps"><div v-for="(label,index) in ['发酵完成','开始包装','核对并完成']" :key="label" :class="{ complete: index < steps, current: index === steps }"><b>{{ index < steps ? '✓' : index + 1 }}</b><span>{{ label }}</span></div></div>
+    <div class="pack-assignment"><div><span>执行人</span><strong>{{ plan.packaging_owner?.name || '待指定' }}</strong></div><div><span>计划开始</span><strong>{{ date(packing.planned_start) }}</strong></div><div><span>计划结束</span><strong>{{ date(packing.planned_end) }}</strong></div></div>
+    <form :id="'packaging-execution-' + task?.id" @submit.prevent="complete">
+      <div class="pack-material-title"><strong>包装材料清单</strong><span>{{ packing.materials?.length || 0 }} 项</span></div>
+      <div class="pack-material-table"><table><thead><tr><th>材料名称</th><th>计划用量</th><th v-if="running || finished">实际用量</th></tr></thead><tbody><tr v-for="(line,index) in packing.materials || []" :key="line.material_id"><td><span class="pack-material-index">{{ String(index + 1).padStart(2,'0') }}</span>{{ line.name }}</td><td>{{ number(line.quantity) }} {{ line.unit || '个' }}</td><td v-if="running || finished"><div v-if="editable && packing.materials_only" class="pack-quantity-input"><input :value="quantities[line.material_id] ?? line.quantity" type="number" min="0" step="1" required :disabled="saving" :aria-label="line.name + '实际用量'" @input="quantities[line.material_id] = $event.target.value"><span>{{ line.unit || '个' }}</span></div><span v-else>{{ finished && packing.execution?.materials ? number(packing.execution.materials.find(item => item.material_id === line.material_id)?.quantity) + ' ' + (line.unit || '个') : finished ? '—' : '待核对' }}</span></td></tr></tbody></table></div>
+      <div v-if="packing.notes" class="pack-instructions"><span>包装要求</span><p>{{ packing.notes }}</p></div>
+      <div v-if="editable" class="pack-record">
+        <div class="pack-output-heading"><strong>{{ needsOutput ? '补登记包装产出' : '实际包装产出' }}</strong><span v-if="liquid">剩余原液 {{ number(liquid.on_hand) }} L</span></div>
+        <div class="pack-output-grid">
+          <label>成品名称<input v-model.trim="productName" required :disabled="saving" aria-label="成品名称"></label>
+          <label>包装单位<select v-model="outputUnit" required :disabled="saving" aria-label="包装单位"><option value="can">罐</option><option value="bottle">瓶</option><option value="keg">桶</option><option value="box">箱</option></select></label>
+          <label>实际装入成品的酒液量（L）<input v-model="actualVolume" type="number" min="0.000001" step="any" required :disabled="saving" aria-label="实际产出酒液量"></label>
+          <label>成品入库位置<select v-model="locationId" required :disabled="saving" aria-label="成品入库位置"><option value="">选择本厂成品库位</option><option v-for="item in locations" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+          <label>实际包装数量<input v-model="actualQty" type="number" min="1" step="1" required :disabled="saving" aria-label="实际包装数量"></label>
+          <label>酒液损耗（L）<input v-model="loss" type="number" min="0" step="any" required :disabled="saving" aria-label="酒液损耗"></label>
+        </div>
+        <p v-if="!locations.length" class="pack-output-help">请管理人员先在系统设置中新增本厂成品库位。</p>
+        <label class="pack-notes">执行备注<textarea v-model="notes" rows="2" :disabled="saving" placeholder="填写本次包装的操作记录或备注"></textarea></label><label class="pack-confirm"><input v-model="confirmed" type="checkbox" required :disabled="saving"><span>已核对产出、损耗和材料用量，提交待放行</span></label></div>
+      <div v-if="finished && !needsOutput" class="pack-finished"><strong>✓ 包装完成</strong><span>{{ packing.execution?.completed_by || plan.packaging_owner?.name }} · {{ date(packing.execution?.completed_at || packing.confirmation?.confirmed_at) }}</span><p v-if="packing.execution?.actual_qty !== undefined">实际包装 {{ number(packing.execution.actual_qty) }} {{ ({can:"罐",bottle:"瓶",keg:"桶",box:"箱"})[packing.execution.output_unit] || "件" }} · {{ number(packing.execution.output_volume_l) }} L</p><p v-if="packing.execution?.notes">{{ packing.execution.notes }}</p></div>
+    </form>
+  </section>
+</template>
+<style scoped>
+.pack-output-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:14px}.pack-output-heading>span{font-size:12px;color:var(--text-muted)}.pack-output-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.pack-output-grid label{display:grid;gap:8px;font-size:12px}.pack-output-grid select{height:38px;padding:0 10px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-input);color:var(--text-primary);font:inherit;color-scheme:dark;min-width:0}.pack-output-total{display:flex;align-items:center;gap:24px;flex-wrap:wrap;background:#d4a85308;border-radius:7px;padding:14px;margin:16px 0;font-size:12px;color:var(--text-muted)}.pack-output-total strong{color:var(--accent-gold);font-size:18px;margin-left:7px}.pack-output-total small{width:100%;font-size:11px}.pack-output-help{font-size:12px;color:#e6ac78;line-height:1.7}@media(max-width:600px){.pack-output-grid{grid-template-columns:1fr}}
+
+.pack-execution{padding:24px;border:1px solid var(--border-default);border-radius:12px;background:linear-gradient(130deg,#d4a85305,transparent)}.pack-execution-header{display:flex;justify-content:space-between;align-items:center;gap:16px}.pack-eyebrow{color:var(--accent-gold);font-size:10px;letter-spacing:2px}.pack-execution h3{font-size:20px;margin:8px 0 10px}.pack-execution-header p{font-size:12px;color:var(--text-muted);line-height:1.7;margin:0}.pack-state{font-size:11px;padding:6px 10px;color:var(--accent-gold);background:#d4a85312;border-radius:5px;white-space:nowrap}.pack-state.finished{color:#93ba8b;background:#93ba8b12}.pack-steps{display:flex;margin:24px 0;gap:12px;padding:16px;background:#ffffff03;border-radius:8px}.pack-steps>div{display:flex;flex:1;gap:8px;align-items:center;font-size:12px;color:var(--text-muted)}.pack-steps b{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1px solid var(--border-default);font-size:11px;flex:none}.pack-steps .complete{color:#93ba8b}.pack-steps .current{color:var(--accent-gold)}.pack-steps .current b{border-color:var(--accent-gold)}.pack-assignment{display:grid;grid-template-columns:.8fr 1.2fr 1.2fr;gap:14px;margin:20px 0 26px}.pack-assignment span{display:block;font-size:11px;color:var(--text-muted);margin-bottom:8px}.pack-assignment strong{font-size:12px;font-weight:500;line-height:1.6}.pack-material-title{display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px}.pack-material-title>span{font-size:11px;color:var(--text-muted)}.pack-material-table{overflow:auto;border:1px solid var(--border-default);border-radius:8px}.pack-material-table table{border-collapse:collapse;width:100%;font-size:12px}.pack-material-table th{font-size:11px;font-weight:500;color:var(--text-muted);background:#ffffff03;padding:12px 16px;text-align:left}.pack-material-table td{padding:16px;border-top:1px solid var(--border-subtle);white-space:nowrap}.pack-material-table th:not(:first-child),.pack-material-table td:not(:first-child){text-align:right}.pack-material-index{font-size:10px;margin-right:12px;color:var(--text-muted)}.pack-quantity-input{display:flex;justify-content:flex-end;gap:8px;align-items:center}.pack-quantity-input input{width:100px}.pack-execution input:not([type=checkbox]),.pack-execution textarea{box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-default);border-radius:7px;background:var(--bg-input);color:var(--text-primary);font:inherit;color-scheme:dark}.pack-execution input:focus,.pack-execution textarea:focus{outline:none;border-color:var(--accent-gold)}.pack-instructions{margin-top:16px;padding:14px 16px;background:#ffffff03;border-radius:7px;font-size:12px}.pack-instructions>span{color:var(--text-muted);font-size:11px}.pack-instructions p{margin:6px 0 0;line-height:1.8;white-space:pre-wrap}.pack-record{margin-top:22px}.pack-notes{display:grid;gap:10px;font-size:12px}.pack-notes textarea{width:100%;resize:vertical}.pack-confirm{display:flex;align-items:center;gap:10px;font-size:12px;margin-top:16px;padding:14px;background:#d4a85307;border-radius:7px;cursor:pointer}.pack-confirm input{width:15px;height:15px;accent-color:var(--accent-gold);flex:none}.pack-legacy-inputs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}.pack-legacy-inputs label{display:grid;gap:8px;font-size:12px}.pack-finished{padding:16px;border-radius:8px;background:#93ba8b08;margin-top:18px}.pack-finished strong{color:#93ba8b;display:block;font-size:13px}.pack-finished span,.pack-finished p{display:block;font-size:12px;color:var(--text-muted);margin:8px 0 0}@media(max-width:650px){.pack-execution{padding:16px}.pack-execution-header{align-items:flex-start}.pack-assignment{grid-template-columns:1fr 1fr;gap:16px}.pack-assignment>div:first-child{grid-column:1/-1}.pack-steps{padding:12px 8px;gap:6px}.pack-steps>div{font-size:10px;gap:5px}.pack-material-table td,.pack-material-table th{padding:12px}.pack-quantity-input input{width:80px}.pack-legacy-inputs{grid-template-columns:1fr}}
+</style>

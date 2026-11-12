@@ -1,3 +1,4 @@
+import {emptyWater,emptyStage} from './water-chemistry.js';
 // Percent fields use 0..100; gravity uses SG; weights are kg (grain) / g (hops, yeast).
 export const fixedUtilization = { FWH: 40, '60': 23, '30': 11, '0': 11, WP: 11, DH: 0 };
 export const present = value => value !== '' && value !== null && value !== undefined && Number.isFinite(Number(value));
@@ -38,8 +39,9 @@ const num = (value, fallback = 0) => present(value) ? Number(value) : fallback;
 export function emptyDesign() {
   return { schema_version: 2, brew_volume_l: 1000, brew_equipment_id: '', ibu_method: 'tinseth',
     targets: { og: '', fg: '', ibu: '', color: '', abv: '' },
+    water_adjustment: emptyWater(),
     fermentables: [], hops: [], yeast: [], attenuation_override: '',
-    mash: { efficiency: 72, water_grain_ratio: 3.5, absorption_rate: 0.8, boil_time_min: 60, evaporation_rate: 10, screen_water_l: 0, sparge_count: 3, sparge_mode: 'auto', sparge_water_liters: [], steps: [], notes: '', workflow: { preheat_offset_c: 5, sparge_temperature_c: 78, iodine_check_required: true, iodine_after_step: 4, whirlpool_time_min: 20, cooling_temperature_c: 18, operations: JSON.parse(JSON.stringify(standardMashOperations)) } },
+    mash: { water_calculation: 'original', efficiency: 72, water_grain_ratio: '', absorption_rate: 0.8, boil_time_min: '', evaporation_rate: '', screen_water_l: 0, sparge_count: '', sparge_mode: 'auto', sparge_water_liters: [], steps: [], notes: '', workflow: { execution_mode: 'standard', preheat_offset_c: 5, sparge_temperature_c: 78, iodine_check_required: true, iodine_after_step: 4, whirlpool_time_min: 20, cooling_temperature_c: 18, operations: {} } },
     fermentation: { target_temperature: '', target_days: '', cold_storage_temperature: '', notes: '', steps: [] } };
 }
 export function normalizeDesign(saved = {}, version = {}) {
@@ -48,7 +50,12 @@ export function normalizeDesign(saved = {}, version = {}) {
   const d = { ...base, ...saved, schema_version: 2,
     brew_volume_l: Number(saved.brew_volume_l) > 0 ? saved.brew_volume_l : version.base_volume_l ?? base.brew_volume_l,
     targets: { og: version.original_gravity || '', fg: version.final_gravity || '', ibu: version.bitterness_ibu || '', color: version.color_ebc || '', abv: version.alcohol_abv || '', ...saved.targets },
-    mash: { ...base.mash, ...saved.mash, workflow: { ...base.mash.workflow, ...(saved.mash?.workflow || {}), operations: { ...base.mash.workflow.operations, ...(saved.mash?.workflow?.operations || {}) } } }, fermentation: { ...base.fermentation, ...saved.fermentation } };
+    mash: { ...base.mash, ...saved.mash, workflow: { ...base.mash.workflow, ...(saved.mash?.workflow || {}), operations: saved.mash?.workflow?.operations ?? {} } }, fermentation: { ...base.fermentation, ...saved.fermentation } };
+  const waterBase=emptyWater();
+  d.water_adjustment={...waterBase,...saved.water_adjustment,target_mode:saved.water_adjustment?.target_mode||(saved.water_adjustment?.target?'saved':'reference'),stages:{mash:{...emptyStage(),...saved.water_adjustment?.stages?.mash,additions:{...emptyStage().additions,...saved.water_adjustment?.stages?.mash?.additions}},sparge:{...emptyStage(),...saved.water_adjustment?.stages?.sparge,additions:{...emptyStage().additions,...saved.water_adjustment?.stages?.sparge?.additions}}}};
+  d.mash.water_calculation = saved.mash ? saved.mash.water_calculation || 'legacy' : base.mash.water_calculation;
+  d.mash.workflow.execution_mode = 'standard';
+  d.mash.workflow.operations = {};
   d.hops = (d.hops || []).map(line => {
     const time = String(line.time ?? '60');
     const use = line.use || (['FWH', 'WP', 'DH', '0'].includes(time) ? time : 'boil');
@@ -67,7 +74,8 @@ export function calculateRecipe(d) {
   const completeGrain = totalQuantity > 0 && grain.every(l => present(l.extract_rate));
   const extractKg = grain.reduce((s, l) => s + num(l.quantity) * num(l.extract_rate) / 100, 0) * num(mash.efficiency, 72) / 100;
   const og = volume > 0 && completeGrain ? 1 + extractKg / volume * 0.4 : null;
-  const preBoilVolume = volume * (1 + num(mash.evaporation_rate, 10) / 100 * num(mash.boil_time_min, 60) / 60);
+  const originalWater = mash.water_calculation === 'original';
+  const preBoilVolume = volume * (1 + num(mash.evaporation_rate, 10) / 100 * (originalWater ? 1 : num(mash.boil_time_min, 60) / 60));
   const preBoilGravity = og && preBoilVolume ? 1 + (og - 1) * volume / preBoilVolume : null;
   const boilGravity = og ? (og + preBoilGravity) / 2 : (num(d.targets?.og) || null);
   const hopResults = (d.hops || []).map(l => {
@@ -91,12 +99,12 @@ export function calculateRecipe(d) {
   const mashWater = totalQuantity * num(mash.water_grain_ratio, 3.5);
   const absorption = totalQuantity * num(mash.absorption_rate, 0.8);
   const firstWort = Math.max(0, mashWater - absorption - num(mash.screen_water_l));
-  const spargeWater = Math.max(0, preBoilVolume - firstWort);
+  const spargeWater = Math.max(0, preBoilVolume - (originalWater ? mashWater : firstWort));
   const count = Math.max(1, Math.min(10, Math.trunc(num(mash.sparge_count, 3))));
   const equal = Math.floor(spargeWater * 100 / count) / 100;
   const spargeWaters = mash.sparge_mode === 'manual' ? Array.from({ length: count }, (_, i) => num(mash.sparge_water_liters?.[i])) : Array.from({ length: count }, (_, i) => i === count - 1 ? Math.round((spargeWater - equal * (count - 1)) * 100) / 100 : equal);
   const actualSparge = spargeWaters.reduce((s, v) => s + v, 0);
-  return { totalQuantity, extractKg, og, fg, abv, ibu, color, attenuation, hopResults, preBoilVolume, preBoilGravity, boilGravity, mashWater, absorption, firstWort, spargeWater, spargeWaters, actualSparge, totalWater: mashWater + actualSparge, spargeDifference: actualSparge - spargeWater };
+  return { totalQuantity, extractKg, og, fg, abv, ibu, color, attenuation, hopResults, preBoilVolume, preBoilGravity, boilGravity, mashWater, absorption, firstWort, spargeWater, spargeWaters, actualSparge, totalWater: Math.max(0, mashWater + actualSparge + (originalWater ? -absorption + num(mash.screen_water_l) : 0)), spargeDifference: actualSparge - spargeWater };
 }
 export function scaleToTarget(d) {
   const current = calculateRecipe(d);
